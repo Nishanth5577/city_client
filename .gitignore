@@ -27,3 +27,5 @@ nul
 .agents/
 .claude/
 .windsurf/
+
+.vercel
