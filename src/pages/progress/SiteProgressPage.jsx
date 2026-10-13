@@ -223,7 +223,7 @@ export default function SiteProgressPage() {
             const projName = report.project_id?.project_name || 'Unknown Project';
             const creator = report.created_by?.name || 'Unknown';
             const imgs = report.images || [];
-            const serverBase = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+            const serverBase = import.meta.env.VITE_API_URL?.replace('/api', '') || (import.meta.env.PROD ? 'https://city-server-nwwr.onrender.com' : 'http://localhost:5000');
 
             return (
               <motion.div
@@ -583,7 +583,7 @@ export default function SiteProgressPage() {
               const imgs = report?.images || [];
               const img = imgs[showLightbox.imgIdx];
               if (!img) return null;
-              const serverBase = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+              const serverBase = import.meta.env.VITE_API_URL?.replace('/api', '') || (import.meta.env.PROD ? 'https://city-server-nwwr.onrender.com' : 'http://localhost:5000');
               const src = img.url?.startsWith('http') ? img.url : `${serverBase}${img.url}`;
 
               return (
