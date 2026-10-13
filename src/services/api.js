@@ -2,7 +2,7 @@ import axios from 'axios';
 import { store } from '../redux/store';
 import { setToken } from '../redux/slices/authSlice';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://city-server-nwwr.onrender.com' : '');
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -31,7 +31,7 @@ api.interceptors.response.use(
         const refreshToken = localStorage.getItem('refreshToken');
         if (!refreshToken) throw new Error('No refresh token');
 
-        const { data } = await axios.post('/api/auth/refresh', { refreshToken });
+        const { data } = await axios.post(`${API_BASE_URL}/api/auth/refresh`, { refreshToken });
 
         localStorage.setItem('accessToken', data.accessToken);
         localStorage.setItem('refreshToken', data.refreshToken);
