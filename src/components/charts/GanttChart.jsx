@@ -2,13 +2,13 @@ import { useMemo } from 'react';
 import { formatDate } from '../../utils/helpers';
 
 const BAR_COLORS = [
-  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
-  '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1',
+  '#0D9488', '#059669', '#D97706', '#DC2626', '#7C3AED',
+  '#0891B2', '#ec4899', '#14b8a6', '#EA580C', '#6366f1',
 ];
 
 const statusColors = {
-  completed: '#10b981',
-  in_progress: '#06b6d4',
+  completed: '#059669',
+  in_progress: '#0891B2',
   pending: '#94a3b8',
 };
 

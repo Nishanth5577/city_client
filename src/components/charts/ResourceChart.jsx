@@ -50,13 +50,13 @@ export default function ResourceChart({ materials = [], equipment = [], title = 
             />
             {isMaterial ? (
               <>
-                <Bar dataKey="total" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={40} name="Total" />
-                <Bar dataKey="available" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} name="Available" />
+                <Bar dataKey="total" fill="#0D9488" radius={[4, 4, 0, 0]} maxBarSize={40} name="Total" />
+                <Bar dataKey="available" fill="#059669" radius={[4, 4, 0, 0]} maxBarSize={40} name="Available" />
               </>
             ) : (
               <>
-                <Bar dataKey="assigned" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={40} name="Assigned" />
-                <Bar dataKey="available" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} name="Available" />
+                <Bar dataKey="assigned" fill="#D97706" radius={[4, 4, 0, 0]} maxBarSize={40} name="Assigned" />
+                <Bar dataKey="available" fill="#059669" radius={[4, 4, 0, 0]} maxBarSize={40} name="Available" />
               </>
             )}
           </BarChart>

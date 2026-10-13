@@ -7,124 +7,124 @@ import toast from 'react-hot-toast';
 
 export default function LoginPage() {
   const dispatch = useDispatch();
-  const { isAuthenticated, loading, error } = useSelector((state) => state.auth);
+  const { isAuthenticated, loading, error } = useSelector(s => s.auth);
   const [form, setForm] = useState({ email: '', password: '' });
   const [showPass, setShowPass] = useState(false);
 
   if (isAuthenticated) return <Navigate to="/dashboard" replace />;
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    dispatch(clearError());
-    const result = await dispatch(login(form));
-    if (login.fulfilled.match(result)) {
-      toast.success('Welcome back!');
-    } else {
-      toast.error(result.payload || 'Login failed');
-    }
+    e.preventDefault(); dispatch(clearError());
+    const r = await dispatch(login(form));
+    if (login.fulfilled.match(r)) toast.success('Welcome back'); else toast.error(r.payload || 'Login failed');
   };
 
   return (
-    <div className="min-h-screen flex gradient-mesh bg-surface-50 dark:bg-surface-950">
-      {/* Left Panel - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-primary-900 via-primary-800 to-surface-900">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-20 left-20 w-72 h-72 bg-accent-500 rounded-full blur-3xl animate-float" />
-          <div className="absolute bottom-20 right-20 w-96 h-96 bg-primary-400 rounded-full blur-3xl animate-float" style={{ animationDelay: '3s' }} />
-        </div>
-        <div className="relative z-10 flex flex-col justify-center px-16">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center mb-8 shadow-glow">
-            <Building2 className="w-8 h-8 text-white" />
+    <div className="min-h-[100dvh] flex" style={{ background: 'var(--canvas)' }}>
+      {/* Left — Branding panel (warm teal gradient) */}
+      <div className="hidden lg:flex lg:w-[48%] relative overflow-hidden" style={{ background: 'linear-gradient(160deg, #0F766E 0%, #0D9488 40%, #14B8A6 100%)' }}>
+        {/* Mesh gradient accents */}
+        <div className="absolute top-0 left-0 w-[500px] h-[400px] rounded-full blur-[160px]" style={{ background: 'rgba(255,255,255,0.08)' }} />
+        <div className="absolute bottom-0 right-0 w-[400px] h-[300px] rounded-full blur-[140px]" style={{ background: 'rgba(124,58,237,0.10)' }} />
+
+        {/* Subtle dot grid */}
+        <div className="absolute inset-0 opacity-[0.08]"
+          style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.5) 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
+
+        {/* Top edge highlight */}
+        <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)' }} />
+
+        <div className="relative z-10 flex flex-col justify-between py-12 px-12 xl:px-16 h-full w-full">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.15)' }}>
+              <Building2 className="w-[18px] h-[18px] text-white" />
+            </div>
+            <span style={{ fontSize: '15px', fontWeight: 700, color: '#fff', letterSpacing: '-0.02em' }}>City Constructions</span>
           </div>
-          <h1 className="text-5xl font-bold text-white mb-4 leading-tight">
-            CITY<br />
-            <span className="text-accent-400">CONSTRUCTIONS</span>
-          </h1>
-          <p className="text-lg text-primary-200 max-w-md leading-relaxed">
-            Enterprise Resource Planning for construction management. Manage projects, workforce, materials, finances, and daily operations — all in one powerful platform.
-          </p>
-          <div className="mt-12 flex gap-8">
-            {[{ num: '500+', label: 'Projects Managed' }, { num: '10K+', label: 'Tasks Completed' }, { num: '99.9%', label: 'Uptime' }].map(stat => (
-              <div key={stat.label}>
-                <p className="text-2xl font-bold text-white">{stat.num}</p>
-                <p className="text-sm text-primary-300">{stat.label}</p>
+
+          <div>
+            <h1 style={{ fontSize: '3.2rem', fontWeight: 800, lineHeight: 1.05, letterSpacing: '-0.045em', color: '#fff', marginBottom: 16 }}>
+              Manage your<br />projects with<br /><span style={{ color: 'rgba(255,255,255,0.7)' }}>confidence.</span>
+            </h1>
+            <p style={{ fontSize: '15px', lineHeight: 1.65, color: 'rgba(255,255,255,0.65)', maxWidth: 380 }}>
+              A unified platform for construction project management — from blueprint to handover.
+            </p>
+          </div>
+
+          <div className="flex gap-10">
+            {[['10+','Projects completed'],['₹20Cr+','Value tracked'],['20yr+','Experience']].map(([v,l]) => (
+              <div key={l}>
+                <p className="font-mono" style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '-0.02em', color: '#fff' }}>
+                  {v}
+                </p>
+                <p style={{ fontSize: '11px', fontWeight: 500, color: 'rgba(255,255,255,0.5)', marginTop: 4, letterSpacing: '0.01em' }}>{l}</p>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Right Panel - Form */}
-      <div className="flex-1 flex items-center justify-center p-6 sm:p-12">
-        <div className="w-full max-w-md animate-slide-up">
-          {/* Mobile logo */}
-          <div className="flex items-center gap-3 mb-8 lg:hidden">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-600 to-primary-800 flex items-center justify-center shadow-glow">
-              <Building2 className="w-6 h-6 text-white" />
+      {/* Right — Form (adapts to dark mode) */}
+      <div className="flex-1 flex items-center justify-center p-6 sm:p-10">
+        <div className="w-full max-w-[380px] animate-fade-in-up">
+          <div className="flex items-center gap-2 mb-8 lg:hidden">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #0D9488, #0F766E)' }}>
+              <Building2 className="w-4 h-4 text-white" />
             </div>
-            <h1 className="text-xl font-bold text-surface-900 dark:text-white">CITY CONSTRUCTIONS</h1>
+            <span style={{ fontSize:'14px', fontWeight:700, color:'var(--t1)', letterSpacing: '-0.01em' }}>City Constructions</span>
           </div>
 
-          <h2 className="text-3xl font-bold text-surface-900 dark:text-white mb-2">Welcome back</h2>
-          <p className="text-surface-500 mb-8">Sign in to your account to continue</p>
+          <h2 style={{ fontSize:'24px', fontWeight:700, color:'var(--t1)', letterSpacing:'-0.03em', marginBottom:4 }}>Welcome back</h2>
+          <p style={{ fontSize:'14px', color:'var(--t4)', marginBottom:32 }}>Sign in to your account</p>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="label-text">Email Address</label>
+          <form onSubmit={handleSubmit}>
+            <div style={{ marginBottom:18 }}>
+              <label className="label-text">Email</label>
               <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
-                <input type="email" placeholder="Enter your email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="input-field pl-10" required id="login-email" />
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[14px] h-[14px]" style={{ color:'var(--t5)' }} />
+                <input type="email" placeholder="you@company.com" value={form.email} onChange={e => setForm({...form, email:e.target.value})} className="input-field" style={{ paddingLeft:36 }} required id="login-email" />
               </div>
             </div>
-
-            <div>
+            <div style={{ marginBottom:18 }}>
               <label className="label-text">Password</label>
               <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
-                <input type={showPass ? 'text' : 'password'} placeholder="Enter your password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="input-field pl-10 pr-10" required id="login-password" />
-                <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-600">
-                  {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[14px] h-[14px]" style={{ color:'var(--t5)' }} />
+                <input type={showPass?'text':'password'} placeholder="••••••••" value={form.password} onChange={e => setForm({...form, password:e.target.value})} className="input-field" style={{ paddingLeft:36, paddingRight:36 }} required id="login-password" />
+                <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3.5 top-1/2 -translate-y-1/2 hover:opacity-80 transition-opacity" style={{ color:'var(--t5)' }}>
+                  {showPass ? <EyeOff className="w-[14px] h-[14px]" /> : <Eye className="w-[14px] h-[14px]" />}
                 </button>
               </div>
             </div>
-
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" className="w-4 h-4 rounded border-surface-300 text-primary-600 focus:ring-primary-500" />
-                <span className="text-sm text-surface-600 dark:text-surface-400">Remember me</span>
+            <div className="flex items-center justify-between" style={{ marginBottom:20 }}>
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" className="w-3.5 h-3.5 rounded" style={{ accentColor:'var(--accent)' }} />
+                <span style={{ fontSize:'12px', color:'var(--t4)' }}>Remember me</span>
               </label>
-              <Link to="/forgot-password" className="text-sm text-primary-600 hover:text-primary-700 font-medium">Forgot password?</Link>
+              <Link to="/forgot-password" style={{ fontSize:'12px', fontWeight:600, color:'var(--accent)' }} className="hover:text-teal-700 transition-colors">Forgot password?</Link>
             </div>
-
-            {error && <p className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 p-3 rounded-xl">{error}</p>}
-
-            <button type="submit" disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2 py-3" id="login-submit">
-              {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><span>Sign In</span><ArrowRight className="w-4 h-4" /></>}
+            {error && <p style={{ fontSize:'12px', color:'#F87171', padding:'10px 14px', borderRadius:10, background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.2)', marginBottom:18 }}>{error}</p>}
+            <button type="submit" disabled={loading} className="btn-primary w-full" style={{ justifyContent:'center', padding:'11px 20px' }} id="login-submit">
+              {loading ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : <><span>Sign in</span><ArrowRight className="w-3.5 h-3.5" /></>}
             </button>
           </form>
 
-          <p className="mt-8 text-center text-sm text-surface-500">
-            Don't have an account? <Link to="/register" className="text-primary-600 hover:text-primary-700 font-semibold">Create Account</Link>
+          <p className="text-center" style={{ fontSize:'13px', color:'var(--t4)', marginTop:28 }}>
+            Don't have an account? <Link to="/register" style={{ fontWeight:600, color:'var(--accent)' }} className="hover:text-teal-700 transition-colors">Create one</Link>
           </p>
 
-          {/* Quick Login */}
-          <div className="mt-6 p-4 bg-primary-50 dark:bg-primary-900/20 rounded-xl border border-primary-200 dark:border-primary-800">
-            <p className="text-xs font-semibold text-primary-700 dark:text-primary-400 mb-2">Quick Login</p>
-            <div className="grid grid-cols-2 gap-1 text-xs text-primary-600 dark:text-primary-300">
-              {[
-                ['Admin', 'admin@cityconstructions.in'],
-                ['Manager', 'manager@cityconstructions.in'],
-                ['Engineer', 'engineer@cityconstructions.in'],
-                ['Supervisor', 'supervisor@cityconstructions.in'],
-                ['Worker', 'worker@cityconstructions.in'],
-              ].map(([role, email]) => (
-                <button key={role} onClick={() => setForm({ email, password: role.toLowerCase() + '123' })}
-                  className="text-left hover:underline cursor-pointer">
-                  <span className="font-medium">{role}:</span> {email.split('@')[0]}
-                </button>
+          <div style={{ marginTop:28, padding:'16px 18px', borderRadius:12, background:'var(--accent-wash)', border:'1px solid var(--border)' }}>
+            <p className="font-mono" style={{ fontSize:'10px', fontWeight:600, color:'var(--accent)', marginBottom:10, letterSpacing:'0.06em', textTransform:'uppercase' }}>Quick Login</p>
+            <div className="grid grid-cols-2 gap-2">
+              {[['Admin','admin@cityconstructions.in'],['Manager','manager@cityconstructions.in'],['Engineer','engineer@cityconstructions.in'],['Supervisor','supervisor@cityconstructions.in'],['Worker','worker@cityconstructions.in']]
+                .map(([role, email]) => (
+                  <button key={role} onClick={() => setForm({ email, password: role.toLowerCase()+'123' })}
+                    className="text-left cursor-pointer transition-all duration-200 px-2 py-1 rounded-md hover:bg-teal-100/50"
+                    style={{ fontSize:'11px', fontWeight:500, color:'var(--accent-dark)' }}>
+                    {role}
+                  </button>
               ))}
             </div>
-            <p className="text-[10px] text-primary-500 mt-1">Password: role + 123 (e.g., admin123)</p>
+            <p className="font-mono" style={{ fontSize:'10px', color:'var(--t4)', marginTop:8 }}>Password: role + 123</p>
           </div>
         </div>
       </div>

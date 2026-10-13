@@ -136,7 +136,7 @@ function RoomLabel({ center, name, area, renderMode }) {
 }
 
 // ─── Main Component ────────────────────────────────────────────
-const RoomGenerator = memo(function RoomGenerator({ walls, renderMode }) {
+const RoomGenerator = memo(function RoomGenerator({ walls, renderMode, showCeiling = true }) {
   const rooms = useMemo(() => {
     const detected = detectRooms(walls);
     return detected.map((room, i) => {
@@ -162,12 +162,14 @@ const RoomGenerator = memo(function RoomGenerator({ walls, renderMode }) {
             floorY={0}
             renderMode={renderMode}
           />
-          {/* Ceiling */}
-          <ProceduralCeiling
-            points={room.points}
-            ceilingHeight={walls[0]?.height || 3000}
-            renderMode={renderMode}
-          />
+          {/* Ceiling — hidden in dollhouse/studio view */}
+          {showCeiling && (
+            <ProceduralCeiling
+              points={room.points}
+              ceilingHeight={walls[0]?.height || 3000}
+              renderMode={renderMode}
+            />
+          )}
           {/* Label */}
           <RoomLabel
             center={room.center}

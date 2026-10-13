@@ -2,7 +2,7 @@ import axios from 'axios';
 import { store } from '../redux/store';
 import { setToken } from '../redux/slices/authSlice';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://city-server-nwwr.onrender.com';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 const api = axios.create({
   baseURL: API_BASE_URL,

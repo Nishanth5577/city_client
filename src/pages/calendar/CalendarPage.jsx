@@ -5,8 +5,8 @@ import { CalendarDays, ChevronLeft, ChevronRight, Plus, Edit, Trash2, X } from '
 import toast from 'react-hot-toast';
 
 const EVENT_TYPES = ['meeting', 'deadline', 'holiday', 'reminder', 'milestone', 'other'];
-const EVENT_COLORS = { meeting: '#3b82f6', deadline: '#ef4444', holiday: '#8b5cf6', reminder: '#f59e0b', milestone: '#10b981', other: '#6b7280' };
-const emptyForm = { title: '', description: '', start: '', end: '', type: 'meeting', color: '#3b82f6', project_id: '' };
+const EVENT_COLORS = { meeting: '#0D9488', deadline: '#DC2626', holiday: '#7C3AED', reminder: '#D97706', milestone: '#059669', other: '#6b7280' };
+const emptyForm = { title: '', description: '', start: '', end: '', type: 'meeting', color: '#0D9488', project_id: '' };
 
 export default function CalendarPage() {
   const [events, setEvents] = useState([]);
@@ -57,7 +57,7 @@ export default function CalendarPage() {
       title: event.title || '', description: event.description || '',
       start: event.start ? new Date(event.start).toISOString().split('T')[0] : '',
       end: event.end ? new Date(event.end).toISOString().split('T')[0] : '',
-      type: event.type || 'other', color: event.color || '#3b82f6',
+      type: event.type || 'other', color: event.color || '#0D9488',
       project_id: event.meta?.project_id || '',
     });
     setShowModal(true);
@@ -97,7 +97,7 @@ export default function CalendarPage() {
 
       {/* Legend */}
       <div className="flex flex-wrap gap-3 text-xs">
-        {[{ label: 'Project', color: '#3b82f6' }, { label: 'Task', color: '#10b981' }, { label: 'Deadline', color: '#ef4444' }, { label: 'Meeting', color: '#3b82f6' }, { label: 'Holiday', color: '#8b5cf6' }].map(l => (
+        {[{ label: 'Project', color: '#0D9488' }, { label: 'Task', color: '#059669' }, { label: 'Deadline', color: '#DC2626' }, { label: 'Meeting', color: '#0D9488' }, { label: 'Holiday', color: '#7C3AED' }].map(l => (
           <span key={l.label} className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: l.color }} />{l.label}</span>
         ))}
       </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { fetchBIMProjects } from '../../redux/slices/bimSlice';
+
 import {
   Building2, ArrowLeft, RefreshCw, Download, AlertTriangle,
   Columns3, Layers, Baseline, Gauge, ShieldCheck, Box
@@ -16,7 +16,7 @@ import api from '../../services/api';
 export default function StructuralDesignPage() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { projects } = useSelector(s => s.bim);
+  const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState('');
   const [structural, setStructural] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -36,50 +36,87 @@ export default function StructuralDesignPage() {
     floorHeight: 3000,
   });
 
-  useEffect(() => { dispatch(fetchBIMProjects()); }, [dispatch]);
+  useEffect(() => {
+    api.get('/api/projects', { params: { limit: 100 } })
+      .then(r => setProjects(r.data.projects || []))
+      .catch(() => {});
+  }, []);
 
   const generateDesign = async () => {
     if (!selectedProject) return;
     setLoading(true);
     try {
-      // Find first building in project
-      const projRes = await api.get(`/api/bim/projects/${selectedProject}`);
-      const buildingId = projRes.data?.buildings?.[0]?._id || projRes.data?.buildings?.[0];
-      if (buildingId) {
-        const res = await api.post('/api/bim/structural/generate', { bim_project_id: selectedProject, building_id: buildingId });
-        setStructural(res.data);
-      }
-      // Fetch schedules
-      try {
-        const colRes = await api.get(`/api/bim/structural/schedule/${selectedProject}/columns`);
-        setColumnSchedule(colRes.data || []);
-      } catch (e) { setColumnSchedule([]); }
-      try {
-        const beamRes = await api.get(`/api/bim/structural/schedule/${selectedProject}/beams`);
-        setBeamSchedule(beamRes.data || []);
-      } catch (e) { setBeamSchedule([]); }
+      const projRes = await api.get(`/api/projects/${selectedProject}`);
+      const project = projRes.data;
+
+      // Estimate area and floors from budget
+      const estimatedAreaSqft = project.budget > 0
+        ? Math.round(project.budget / 1800)
+        : Math.round((project.contract_value || 500000) / 1800);
+      const estimatedFloors = estimatedAreaSqft > 5000 ? 4 : estimatedAreaSqft > 2000 ? 3 : 2;
+      const buildingType = project.project_type || 'residential';
+      const isCommercial = buildingType === 'commercial' || buildingType === 'industrial';
+
+      setParams(p => ({
+        ...p,
+        buildingType,
+        numFloors: estimatedFloors,
+        slabThickness: isCommercial ? 175 : 150,
+        windSpeed: 39,
+        soilBearingCapacity: 200,
+        floorHeight: isCommercial ? 3500 : 3000,
+      }));
+
+      // Generate column & beam schedules based on area
+      const numColumns = Math.max(4, Math.ceil(estimatedAreaSqft / 150));
+      const numBeams = Math.max(4, Math.ceil(estimatedAreaSqft / 120));
+      const cols = Array.from({ length: Math.min(numColumns, 12) }, (_, i) => ({
+        id: `C${i + 1}`,
+        size: isCommercial ? '400×400' : '300×300',
+        reinforcement: isCommercial ? '8-20mm' : '4-16mm + 4-12mm',
+        stirrups: '8mm @ 150 c/c',
+        load: Math.round((estimatedAreaSqft / numColumns) * estimatedFloors * 15),
+      }));
+      const beams = Array.from({ length: Math.min(numBeams, 10) }, (_, i) => ({
+        id: `B${i + 1}`,
+        span: isCommercial ? '5000' : '4000',
+        size: isCommercial ? '300×500' : '230×450',
+        topSteel: isCommercial ? '3-16mm' : '2-16mm',
+        bottomSteel: isCommercial ? '3-20mm' : '2-20mm + 1-16mm',
+        stirrups: '8mm @ 150 c/c',
+      }));
+      setColumnSchedule(cols);
+      setBeamSchedule(beams);
+
+      setStructural({
+        concrete_grade: params.concreteGrade,
+        steel_grade: params.steelGrade,
+        estimated_area: estimatedAreaSqft,
+        project_name: project.project_name,
+      });
     } catch (err) { console.error(err); }
     setLoading(false);
   };
 
-  const fetchExisting = async (projectId) => {
-    try {
-      const res = await api.get(`/api/bim/structural/${projectId}`);
-      if (res.data?.length > 0) {
-        setStructural(res.data[0]);
-        if (res.data[0].load_summary) {
-          setParams(p => ({
-            ...p,
-            concreteGrade: res.data[0].concrete_grade || 'M25',
-            steelGrade: res.data[0].steel_grade || 'Fe500',
-          }));
-        }
-      }
-    } catch (e) {}
-  };
-
+  // Auto-load project data when selected
   useEffect(() => {
-    if (selectedProject) fetchExisting(selectedProject);
+    if (selectedProject) {
+      api.get(`/api/projects/${selectedProject}`).then(res => {
+        const project = res.data;
+        const buildingType = project.project_type || 'residential';
+        const isCommercial = buildingType === 'commercial' || buildingType === 'industrial';
+        const estimatedAreaSqft = project.budget > 0
+          ? Math.round(project.budget / 1800)
+          : Math.round((project.contract_value || 500000) / 1800);
+        setParams(p => ({
+          ...p,
+          buildingType,
+          numFloors: estimatedAreaSqft > 5000 ? 4 : estimatedAreaSqft > 2000 ? 3 : 2,
+          slabThickness: isCommercial ? 175 : 150,
+          floorHeight: isCommercial ? 3500 : 3000,
+        }));
+      }).catch(() => {});
+    }
   }, [selectedProject]);
 
   // Client-side calculations
@@ -116,7 +153,7 @@ export default function StructuralDesignPage() {
       {/* Project selector + Generate */}
       <div className="flex gap-4 items-end">
         <div className="flex-1">
-          <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1">Select BIM Project</label>
+          <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1">Select Project</label>
           <select value={selectedProject} onChange={(e) => setSelectedProject(e.target.value)}
             className="w-full px-4 py-2.5 rounded-xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 text-surface-900 dark:text-white">
             <option value="">Choose project...</option>

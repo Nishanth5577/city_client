@@ -53,7 +53,7 @@ export default function CostEstimationPage() {
   };
 
   const est = selectedEstimation || costEstimation;
-  const summary = est?.summary;
+  const summary = est?.summary || null;
   const boqItems = est?.boq_items || [];
 
   // Group BOQ items by category
@@ -121,7 +121,7 @@ export default function CostEstimationPage() {
         )}
       </div>
 
-      {!est ? (
+      {!est || !summary ? (
         <div className="glass-card p-12 text-center">
           <Calculator className="w-16 h-16 text-surface-400 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-surface-700 dark:text-surface-300 mb-2">No Estimation Yet</h3>

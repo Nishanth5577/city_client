@@ -35,18 +35,12 @@ const AttendancePage = lazy(() => import('./pages/attendance/AttendancePage'));
 const BIMProjectsPage = lazy(() => import('./pages/bim/BIMProjectsPage'));
 const DesignStudioPage = lazy(() => import('./pages/bim/DesignStudioPage'));
 const MaterialLibraryPage = lazy(() => import('./pages/bim/MaterialLibraryPage'));
-const CostEstimationPage = lazy(() => import('./pages/bim/CostEstimationPage'));
+
 const BIMAnalyticsPage = lazy(() => import('./pages/bim/BIMAnalyticsPage'));
 const StructuralDesignPage = lazy(() => import('./pages/bim/StructuralDesignPage'));
 const MEPDashboardPage = lazy(() => import('./pages/bim/MEPDashboardPage'));
-const ImportExportPage = lazy(() => import('./pages/bim/ImportExportPage'));
-const DesignApprovalsPage = lazy(() => import('./pages/bim/DesignApprovalsPage'));
-const ClientReviewPage = lazy(() => import('./pages/bim/ClientReviewPage'));
 const AIArchitectPage = lazy(() => import('./pages/bim/AIArchitectPage'));
-const VirtualTourPage = lazy(() => import('./pages/bim/VirtualTourPage'));
-const CollaborationPage = lazy(() => import('./pages/bim/CollaborationPage'));
-const ExportManagerPage = lazy(() => import('./pages/bim/ExportManagerPage'));
-const VRARViewerPage = lazy(() => import('./pages/bim/VRARViewerPage'));
+const SiteProgressPage = lazy(() => import('./pages/progress/SiteProgressPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 function ProtectedRoute({ children }) {
@@ -101,6 +95,7 @@ export default function App() {
           <Route path="projects/:id" element={<ProjectDetailPage />} />
           <Route path="tasks" element={<TasksPage />} />
           <Route path="gantt" element={<GanttPage />} />
+          <Route path="site-progress" element={<SiteProgressPage />} />
           <Route path="resources" element={<ResourcesPage />} />
           <Route path="workers" element={<WorkersPage />} />
           <Route path="expenses" element={<ExpensesPage />} />
@@ -116,20 +111,11 @@ export default function App() {
           <Route path="bim" element={<BIMProjectsPage />} />
           <Route path="bim/studio/:id" element={<DesignStudioPage />} />
           <Route path="bim/materials" element={<MaterialLibraryPage />} />
-          <Route path="bim/cost-estimation" element={<CostEstimationPage />} />
+
           <Route path="bim/analytics" element={<BIMAnalyticsPage />} />
           <Route path="bim/structural" element={<StructuralDesignPage />} />
           <Route path="bim/mep" element={<MEPDashboardPage />} />
-          <Route path="bim/import" element={<ImportExportPage />} />
-          <Route path="bim/approvals" element={<DesignApprovalsPage />} />
-          <Route path="bim/review" element={<ClientReviewPage />} />
-          <Route path="bim/review/:projectId" element={<ClientReviewPage />} />
           <Route path="bim/ai-architect" element={<AIArchitectPage />} />
-          <Route path="bim/virtual-tour" element={<VirtualTourPage />} />
-          <Route path="bim/tour/:token" element={<VirtualTourPage />} />
-          <Route path="bim/collaboration" element={<CollaborationPage />} />
-          <Route path="bim/exports" element={<ExportManagerPage />} />
-          <Route path="bim/vr-ar" element={<VRARViewerPage />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />

@@ -1,18 +1,14 @@
-import { FolderOpen } from 'lucide-react';
+import { Inbox } from 'lucide-react';
 
-export default function EmptyState({ icon: Icon = FolderOpen, title = 'No data found', description = '', action, actionLabel = 'Get Started' }) {
+export default function EmptyState({ icon: Icon = Inbox, title = 'No data', description = '', action, actionLabel }) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center animate-fade-in">
-      <div className="w-20 h-20 rounded-2xl bg-surface-100 dark:bg-surface-800 flex items-center justify-center mb-6">
-        <Icon className="w-10 h-10 text-surface-300 dark:text-surface-600" />
+    <div className="flex flex-col items-center justify-center py-16 px-4">
+      <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ background:'#F0FDFA', border:'1px solid #CCFBF1' }}>
+        <Icon className="w-6 h-6" style={{ color:'#0D9488' }} strokeWidth={1.5} />
       </div>
-      <h3 className="text-lg font-semibold text-surface-700 dark:text-surface-300 mb-2">{title}</h3>
-      {description && <p className="text-sm text-surface-400 max-w-sm mb-6">{description}</p>}
-      {action && (
-        <button onClick={action} className="btn-primary text-sm">
-          {actionLabel}
-        </button>
-      )}
+      <p style={{ fontSize:'15px', fontWeight:600, color:'var(--t1)', marginBottom:6, letterSpacing:'-0.01em' }}>{title}</p>
+      {description && <p style={{ fontSize:'13px', color:'var(--t4)', textAlign:'center', maxWidth:300, lineHeight:1.5 }}>{description}</p>}
+      {action && <button onClick={action} className="btn-primary mt-5">{actionLabel || 'Get started'}</button>}
     </div>
   );
 }

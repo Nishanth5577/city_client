@@ -79,6 +79,32 @@ export const deleteMEPElement = createAsyncThunk('bim/deleteMEPElement', async (
   catch (err) { return rejectWithValue(err.response?.data?.message || 'Failed to delete MEP element'); }
 });
 
+// ═══════ Bonsai / IFC Thunks ═══════
+export const checkBonsaiStatus = createAsyncThunk('bim/checkBonsaiStatus', async (_, { rejectWithValue }) => {
+  try { const { data } = await bimService.getBonsaiStatus(); return data; }
+  catch (err) { return rejectWithValue('Bonsai service unavailable'); }
+});
+
+export const exportProjectToIFC = createAsyncThunk('bim/exportToIFC', async ({ projectId, config }, { rejectWithValue }) => {
+  try { const { data } = await bimService.exportToIFC(projectId, config); return data; }
+  catch (err) { return rejectWithValue(err.response?.data?.message || 'IFC export failed'); }
+});
+
+export const importIFCToProject = createAsyncThunk('bim/importIFC', async (formData, { rejectWithValue }) => {
+  try { const { data } = await bimService.importIFC(formData); return data; }
+  catch (err) { return rejectWithValue(err.response?.data?.message || 'IFC import failed'); }
+});
+
+export const fetchIFCExports = createAsyncThunk('bim/fetchIFCExports', async (projectId, { rejectWithValue }) => {
+  try { const { data } = await bimService.getIFCExports(projectId); return data; }
+  catch (err) { return rejectWithValue(err.response?.data?.message || 'Failed to fetch IFC exports'); }
+});
+
+export const validateProjectIFC = createAsyncThunk('bim/validateIFC', async (exportId, { rejectWithValue }) => {
+  try { const { data } = await bimService.validateIFC(exportId); return data; }
+  catch (err) { return rejectWithValue(err.response?.data?.message || 'IFC validation failed'); }
+});
+
 const initialState = {
   // Project list
   projects: [],
@@ -95,7 +121,7 @@ const initialState = {
   activeBuildingId: null,
 
   // Canvas state
-  elements: { walls: [], columns: [], beams: [], doors: [], windows: [], stairs: [], furniture: [], rooms: [] },
+  elements: { walls: [], columns: [], beams: [], doors: [], windows: [], stairs: [], furniture: [], rooms: [], slabs: [], roofs: [], foundations: [], railings: [], ceilings: [] },
   selectedElementIds: [],
   selectedElementType: null,
   hoveredElementId: null,
@@ -148,6 +174,7 @@ const initialState = {
   showPropertiesPanel: true,
   showLayerPanel: false,
   showTimeline: false,
+  showModelTree: false,
   darkMode: true,
 
   // Auto-save
@@ -165,6 +192,39 @@ const initialState = {
   // Structural
   structuralDesign: null,
   structuralLoading: false,
+
+  // Camera & Presentation (new)
+  cameraMode: 'orbit', // orbit, walk, first_person, fly
+  walkMode: false,
+  presentationMode: 'design', // design, realistic, presentation, walkthrough
+  timeOfDay: 14, // 0-24 hour for lighting
+  lightingPreset: 'afternoon',
+
+  // Roof settings (new)
+  roofSettings: {
+    type: 'flat',
+    slope: 30,
+    ridgeHeight: 1200,
+    overhang: 300,
+    thickness: 150,
+    hasParapet: true,
+    parapetHeight: 900,
+    material: 'concrete',
+  },
+
+  // Bonsai / IFC
+  bonsaiConnected: false,
+  bonsaiStatus: null,
+  bonsaiLoading: false,
+  ifcExporting: false,
+  ifcExportProgress: null,
+  ifcExports: [],
+  ifcExportsLoading: false,
+  ifcImporting: false,
+  ifcImportResult: null,
+  ifcValidation: null,
+  ifcValidating: false,
+  showBonsaiPanel: false,
 
   error: null,
 };
@@ -300,6 +360,86 @@ const bimSlice = createSlice({
     setRenderMode: (state, action) => { state.renderMode = action.payload; },
     setTransformMode: (state, action) => { state.transformMode = action.payload; },
 
+    // Camera & Presentation (new)
+    setCameraMode: (state, action) => { state.cameraMode = action.payload; },
+    setWalkMode: (state, action) => { state.walkMode = action.payload; },
+    setPresentationMode: (state, action) => { state.presentationMode = action.payload; },
+    setTimeOfDay: (state, action) => { state.timeOfDay = action.payload; },
+    setLightingPreset: (state, action) => { state.lightingPreset = action.payload; },
+
+    // Roof settings (new)
+    setRoofSettings: (state, action) => { state.roofSettings = { ...state.roofSettings, ...action.payload }; },
+
+    // Level management (new)
+    addLevel: (state, action) => {
+      const building = state.activeProject?.buildings?.find(b => b._id === state.activeBuildingId) || state.activeProject?.buildings?.[0];
+      if (building) {
+        const newFloor = {
+          _id: `floor_${Date.now()}`,
+          floor_name: action.payload.name || `Floor ${building.floors?.length || 0}`,
+          floor_number: action.payload.number || (building.floors?.length || 0),
+          elevation: action.payload.elevation || 0,
+          floor_to_floor: action.payload.floorToFloor || 3000,
+          visible: true,
+          locked: false,
+          elements: { walls: [], columns: [], beams: [], doors: [], windows: [], stairs: [], furniture: [], rooms: [], slabs: [], roofs: [], foundations: [], railings: [], ceilings: [] },
+        };
+        if (!building.floors) building.floors = [];
+        building.floors.push(newFloor);
+        state.activeFloorId = newFloor._id;
+        state.hasUnsavedChanges = true;
+      }
+    },
+    removeLevel: (state, action) => {
+      const building = state.activeProject?.buildings?.find(b => b._id === state.activeBuildingId) || state.activeProject?.buildings?.[0];
+      if (building?.floors) {
+        building.floors = building.floors.filter(f => f._id !== action.payload.floorId);
+        if (state.activeFloorId === action.payload.floorId) {
+          state.activeFloorId = building.floors[0]?._id || null;
+        }
+        state.hasUnsavedChanges = true;
+      }
+    },
+    duplicateLevel: (state, action) => {
+      const building = state.activeProject?.buildings?.find(b => b._id === state.activeBuildingId) || state.activeProject?.buildings?.[0];
+      if (building?.floors) {
+        const source = building.floors.find(f => f._id === action.payload.floorId);
+        if (source) {
+          const newFloor = JSON.parse(JSON.stringify(source));
+          newFloor._id = `floor_${Date.now()}`;
+          newFloor.floor_name = `${source.floor_name} (Copy)`;
+          newFloor.floor_number = building.floors.length;
+          newFloor.elevation = (source.elevation || 0) + (source.floor_to_floor || 3000);
+          building.floors.push(newFloor);
+          state.activeFloorId = newFloor._id;
+          state.hasUnsavedChanges = true;
+        }
+      }
+    },
+    renameLevel: (state, action) => {
+      const building = state.activeProject?.buildings?.find(b => b._id === state.activeBuildingId) || state.activeProject?.buildings?.[0];
+      if (building?.floors) {
+        const floor = building.floors.find(f => f._id === action.payload.floorId);
+        if (floor) { floor.floor_name = action.payload.name; state.hasUnsavedChanges = true; }
+      }
+    },
+    toggleLevelVisibility: (state, action) => {
+      const building = state.activeProject?.buildings?.find(b => b._id === state.activeBuildingId) || state.activeProject?.buildings?.[0];
+      if (building?.floors) {
+        const floor = building.floors.find(f => f._id === action.payload.floorId);
+        if (floor) floor.visible = !floor.visible;
+      }
+    },
+    setLevelHeight: (state, action) => {
+      const building = state.activeProject?.buildings?.find(b => b._id === state.activeBuildingId) || state.activeProject?.buildings?.[0];
+      if (building?.floors) {
+        const floor = building.floors.find(f => f._id === action.payload.floorId);
+        if (floor) { floor.floor_to_floor = action.payload.height; state.hasUnsavedChanges = true; }
+      }
+    },
+    toggleModelTree: (state) => { state.showModelTree = !state.showModelTree; },
+    toggleBonsaiPanel: (state) => { state.showBonsaiPanel = !state.showBonsaiPanel; },
+
     // Save state
     markSaved: (state) => { state.hasUnsavedChanges = false; state.lastSaved = new Date().toISOString(); },
     clearError: (state) => { state.error = null; },
@@ -346,6 +486,11 @@ const bimSlice = createSlice({
           stairs: action.payload.elements?.stairs || [],
           furniture: action.payload.elements?.furniture || [],
           rooms: action.payload.rooms || [],
+          slabs: action.payload.elements?.slabs || [],
+          roofs: action.payload.elements?.roofs || [],
+          foundations: action.payload.elements?.foundations || [],
+          railings: action.payload.elements?.railings || [],
+          ceilings: action.payload.elements?.ceilings || [],
         };
       })
 
@@ -398,6 +543,59 @@ const bimSlice = createSlice({
         const { type, id } = action.payload;
         const key = `${type}Elements`;
         if (state[key]) state[key] = state[key].filter(e => e._id !== id);
+      })
+
+      // ═══════ Bonsai / IFC ═══════
+      .addCase(checkBonsaiStatus.pending, (state) => { state.bonsaiLoading = true; })
+      .addCase(checkBonsaiStatus.fulfilled, (state, action) => {
+        state.bonsaiLoading = false;
+        state.bonsaiConnected = action.payload.connected;
+        state.bonsaiStatus = action.payload;
+      })
+      .addCase(checkBonsaiStatus.rejected, (state) => {
+        state.bonsaiLoading = false;
+        state.bonsaiConnected = false;
+      })
+
+      .addCase(exportProjectToIFC.pending, (state) => { state.ifcExporting = true; state.ifcExportProgress = 'Preparing export...'; })
+      .addCase(exportProjectToIFC.fulfilled, (state, action) => {
+        state.ifcExporting = false;
+        state.ifcExportProgress = null;
+        if (action.payload?.export) {
+          state.ifcExports.unshift(action.payload.export);
+        }
+      })
+      .addCase(exportProjectToIFC.rejected, (state, action) => {
+        state.ifcExporting = false;
+        state.ifcExportProgress = null;
+        state.error = action.payload;
+      })
+
+      .addCase(importIFCToProject.pending, (state) => { state.ifcImporting = true; })
+      .addCase(importIFCToProject.fulfilled, (state, action) => {
+        state.ifcImporting = false;
+        state.ifcImportResult = action.payload;
+      })
+      .addCase(importIFCToProject.rejected, (state, action) => {
+        state.ifcImporting = false;
+        state.error = action.payload;
+      })
+
+      .addCase(fetchIFCExports.pending, (state) => { state.ifcExportsLoading = true; })
+      .addCase(fetchIFCExports.fulfilled, (state, action) => {
+        state.ifcExportsLoading = false;
+        state.ifcExports = action.payload;
+      })
+      .addCase(fetchIFCExports.rejected, (state) => { state.ifcExportsLoading = false; })
+
+      .addCase(validateProjectIFC.pending, (state) => { state.ifcValidating = true; })
+      .addCase(validateProjectIFC.fulfilled, (state, action) => {
+        state.ifcValidating = false;
+        state.ifcValidation = action.payload?.validation;
+      })
+      .addCase(validateProjectIFC.rejected, (state, action) => {
+        state.ifcValidating = false;
+        state.error = action.payload;
       });
   },
 });
@@ -414,6 +612,12 @@ export const {
   toggleComponentLibrary, togglePropertiesPanel, toggleLayerPanel, toggleTimeline, toggleDarkMode,
   toggleLayerVisibility, toggleLayerLock,
   setRenderMode, setTransformMode,
+  // New actions
+  setCameraMode, setWalkMode, setPresentationMode, setTimeOfDay, setLightingPreset,
+  setRoofSettings,
+  addLevel, removeLevel, duplicateLevel, renameLevel, toggleLevelVisibility, setLevelHeight,
+  toggleModelTree,
+  toggleBonsaiPanel,
   markSaved, clearError, resetBimState,
 } = bimSlice.actions;
 

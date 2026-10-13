@@ -1,3 +1,7 @@
+// ═══════════════════════════════════════════════════════════════
+// DesignStudioPage — Premium Architectural Design Workspace
+// Complete redesign: Header + Toolbar + Left Panel + Viewport + Right Panel
+// ═══════════════════════════════════════════════════════════════
 import { useEffect, useCallback, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
@@ -7,28 +11,40 @@ import {
   clearSelection, pushUndo, toggleComponentLibrary, togglePropertiesPanel,
   toggleLayerPanel, selectElement, addElementLocal, removeElementLocal,
   updateElementLocal, createBimElement, deleteBimElement,
-  setActiveFloor, setRenderMode, setTransformMode,
+  setActiveFloor, setRenderMode, setTransformMode, setWalkMode,
 } from '../../redux/slices/bimSlice';
-import { TOOLS, VIEW_MODES, KEYBOARD_SHORTCUTS, RENDER_MODES, TRANSFORM_MODES, CAMERA_PRESETS } from '../../utils/bimConstants';
-import TopRibbon from '../../components/bim/ui/TopRibbon';
+import { TOOLS, VIEW_MODES, TRANSFORM_MODES, RENDER_MODES } from '../../utils/bimConstants';
+
+// New UI components
+import DesignStudioHeader from '../../components/bim/ui/DesignStudioHeader';
+import DesignStudioToolbar from '../../components/bim/ui/DesignStudioToolbar';
+import '../../components/bim/ui/DesignStudio.css';
+
+// Existing components
 import ComponentLibrary from '../../components/bim/ui/ComponentLibrary';
 import InspectorPanel from '../../components/bim/ui/InspectorPanel';
+import LevelManager from '../../components/bim/ui/LevelManager';
 import FloorPlanCanvas from '../../components/bim/editor/FloorPlanCanvas';
 import Building3DView from '../../components/bim/viewer/Building3DView';
+
 import {
-  Loader2, Box, Grid3X3, ZoomIn, ZoomOut, Maximize2,
-  MapPin, Save, Keyboard, Info, Layers,
+  Loader2, Box, ZoomIn, ZoomOut, Maximize2,
+  MapPin, Save, Keyboard, Layers, AlertTriangle,
 } from 'lucide-react';
 
 export default function DesignStudioPage() {
   const { id } = useParams();
   const dispatch = useDispatch();
   const navigate = useNavigate();
+
+  // UI state
   const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
   const [leftPanelWidth, setLeftPanelWidth] = useState(260);
-  const [rightPanelWidth, setRightPanelWidth] = useState(280);
+  const [rightPanelWidth, setRightPanelWidth] = useState(300);
+  const [activeViewTab, setActiveViewTab] = useState(VIEW_MODES.VIEW_3D);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [leftTab, setLeftTab] = useState('library'); // library | floors | hierarchy
   const isResizingLeft = useRef(false);
   const isResizingRight = useRef(false);
 
@@ -37,20 +53,19 @@ export default function DesignStudioPage() {
     elements, selectedElementIds, selectedElementType,
     activeTool, viewMode, renderMode, zoom, hasUnsavedChanges, saving,
     showComponentLibrary, showPropertiesPanel, undoStack, redoStack,
-    lastSaved, layers,
+    lastSaved, layers, walkMode,
   } = useSelector(s => s.bim);
 
-  // Load project
+  // ─── Load Project ───
   useEffect(() => {
     if (id) dispatch(fetchBimProject(id));
   }, [dispatch, id]);
 
-  // Load floor data when floor changes
   useEffect(() => {
     if (activeFloorId) dispatch(fetchFloor(activeFloorId));
   }, [dispatch, activeFloorId]);
 
-  // Auto-save with stable reference
+  // ─── Auto-save ───
   const saveRef = useRef(null);
   saveRef.current = () => {
     if (activeFloorId) {
@@ -60,17 +75,14 @@ export default function DesignStudioPage() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      if (hasUnsavedChanges && activeFloorId) {
-        saveRef.current();
-      }
+      if (hasUnsavedChanges && activeFloorId) saveRef.current();
     }, 30000);
     return () => clearInterval(interval);
   }, [hasUnsavedChanges, activeFloorId]);
 
-  const handleSave = useCallback(() => {
-    saveRef.current?.();
-  }, []);
+  const handleSave = useCallback(() => saveRef.current?.(), []);
 
+  // ─── Delete Selected ───
   const handleDeleteSelected = useCallback(() => {
     if (selectedElementIds.length > 0 && selectedElementType) {
       dispatch(pushUndo({ type: 'delete', data: JSON.parse(JSON.stringify(elements)) }));
@@ -82,7 +94,42 @@ export default function DesignStudioPage() {
     }
   }, [dispatch, selectedElementIds, selectedElementType, elements]);
 
-  // Keyboard shortcuts
+  // ─── View Tab Change Handler ───
+  const handleViewTabChange = useCallback((tabId) => {
+    setActiveViewTab(tabId);
+    if (tabId === VIEW_MODES.VIEW_3D) {
+      dispatch(setViewMode(VIEW_MODES.VIEW_3D));
+      dispatch(setWalkMode(false));
+      dispatch(setRenderMode(RENDER_MODES.REALISTIC));
+    } else if (tabId === VIEW_MODES.PLAN_2D) {
+      dispatch(setViewMode(VIEW_MODES.PLAN_2D));
+      dispatch(setWalkMode(false));
+    } else if (tabId === 'dollhouse') {
+      dispatch(setViewMode(VIEW_MODES.VIEW_3D));
+      dispatch(setWalkMode(false));
+      // DollhouseControls will handle the section plane
+    } else if (tabId === 'walkthrough') {
+      dispatch(setViewMode(VIEW_MODES.VIEW_3D));
+      dispatch(setWalkMode(true));
+    } else if (tabId === 'render') {
+      dispatch(setViewMode(VIEW_MODES.VIEW_3D));
+      dispatch(setWalkMode(false));
+      dispatch(setRenderMode(RENDER_MODES.REALISTIC));
+    }
+  }, [dispatch]);
+
+  // ─── Fullscreen Toggle ───
+  const handleToggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.();
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen?.();
+      setIsFullscreen(false);
+    }
+  }, []);
+
+  // ─── Keyboard Shortcuts ───
   useEffect(() => {
     const handler = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
@@ -107,8 +154,8 @@ export default function DesignStudioPage() {
         case 'L': dispatch(toggleLayerPanel()); break;
         case 'ESCAPE': dispatch(clearSelection()); dispatch(setActiveTool(TOOLS.SELECT)); break;
         case 'DELETE': handleDeleteSelected(); break;
-        case '2': dispatch(setViewMode(VIEW_MODES.PLAN_2D)); break;
-        case '3': dispatch(setViewMode(VIEW_MODES.VIEW_3D)); break;
+        case '2': handleViewTabChange(VIEW_MODES.PLAN_2D); break;
+        case '3': handleViewTabChange(VIEW_MODES.VIEW_3D); break;
         case 'Ctrl+=': case '+': e.preventDefault(); dispatch(setZoom(zoom * 1.2)); break;
         case 'Ctrl+-': case '-': e.preventDefault(); dispatch(setZoom(zoom / 1.2)); break;
         default: break;
@@ -116,37 +163,13 @@ export default function DesignStudioPage() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [dispatch, zoom, selectedElementIds, handleSave, handleDeleteSelected]);
+  }, [dispatch, zoom, selectedElementIds, handleSave, handleDeleteSelected, handleViewTabChange]);
 
-  // Ribbon action handler
-  const handleRibbonAction = useCallback((action) => {
-    switch (action) {
-      case 'toggle_grid': dispatch(setActiveTool(TOOLS.PAN)); break;
-      case 'toggle_layers': dispatch(toggleLayerPanel()); break;
-      case 'render_realistic': dispatch(setRenderMode(RENDER_MODES.REALISTIC)); break;
-      case 'render_wireframe': dispatch(setRenderMode(RENDER_MODES.WIREFRAME)); break;
-      case 'render_xray': dispatch(setRenderMode(RENDER_MODES.XRAY)); break;
-      case 'view_top': case 'view_front': case 'view_left': case 'view_right': case 'view_iso':
-        dispatch(setViewMode(VIEW_MODES.VIEW_3D));
-        break;
-      case 'export_json': break;
-      case 'export_pdf': break;
-      case 'export_gltf': break;
-      case 'quantity_takeoff': break;
-      case 'cost_estimate': break;
-      default: break;
-    }
-  }, [dispatch]);
-
-  // Panel resize
+  // ─── Panel Resize ───
   useEffect(() => {
     const handleMouseMove = (e) => {
-      if (isResizingLeft.current) {
-        setLeftPanelWidth(Math.max(200, Math.min(400, e.clientX)));
-      }
-      if (isResizingRight.current) {
-        setRightPanelWidth(Math.max(200, Math.min(420, window.innerWidth - e.clientX)));
-      }
+      if (isResizingLeft.current) setLeftPanelWidth(Math.max(200, Math.min(400, e.clientX)));
+      if (isResizingRight.current) setRightPanelWidth(Math.max(220, Math.min(420, window.innerWidth - e.clientX)));
     };
     const handleMouseUp = () => {
       isResizingLeft.current = false;
@@ -156,214 +179,245 @@ export default function DesignStudioPage() {
     };
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
+    return () => { window.removeEventListener('mousemove', handleMouseMove); window.removeEventListener('mouseup', handleMouseUp); };
   }, []);
 
-  const startResizeLeft = () => {
-    isResizingLeft.current = true;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-  };
+  const startResizeLeft = () => { isResizingLeft.current = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; };
+  const startResizeRight = () => { isResizingRight.current = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; };
 
-  const startResizeRight = () => {
-    isResizingRight.current = true;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-  };
-
-  // Floor info
+  // ─── Computed Values ───
   const currentBuilding = activeProject?.buildings?.find(b => b._id === activeBuildingId);
   const currentFloor = currentBuilding?.floors?.find(f => f._id === activeFloorId);
-
-  // Total element count
   const totalElements = Object.values(elements).reduce((sum, arr) => sum + (arr?.length || 0), 0);
 
+  // ─── Loading State ───
   if (activeProjectLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-surface-950">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 text-primary-500 animate-spin mx-auto mb-4" />
-          <p className="text-surface-400 text-lg">Loading BIM Design Studio...</p>
+      <div className="bim-studio" style={{ alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <Loader2 className="w-10 h-10 animate-spin" style={{ color: '#0D9488', margin: '0 auto 16px' }} />
+          <p style={{ color: '#64748B', fontSize: 14 }}>Loading Design Studio...</p>
         </div>
       </div>
     );
   }
 
+  // ─── Error State ───
   if (!activeProject) {
     return (
-      <div className="flex items-center justify-center h-screen bg-surface-950">
-        <div className="text-center">
-          <Box className="w-16 h-16 text-surface-600 mx-auto mb-4" />
-          <h2 className="text-xl text-white mb-2">Project Not Found</h2>
-          <button onClick={() => navigate('/bim')} className="btn-primary mt-4">Go to BIM Projects</button>
+      <div className="bim-studio" style={{ alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <AlertTriangle className="w-12 h-12" style={{ color: '#F59E0B', margin: '0 auto 16px' }} />
+          <h2 style={{ color: '#F1F5F9', fontSize: 18, fontWeight: 600, marginBottom: 8 }}>Project Not Found</h2>
+          <p style={{ color: '#64748B', fontSize: 13, marginBottom: 20 }}>This design may have been deleted or you don't have access.</p>
+          <button
+            onClick={() => navigate('/bim')}
+            style={{
+              padding: '8px 20px', background: '#0D9488', color: '#F0FDFA',
+              border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            Back to Projects
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen bg-surface-950 text-surface-200 overflow-hidden -m-6">
-      {/* Top Ribbon */}
-      <TopRibbon
-        projectName={activeProject?.design_name}
+    <div className="bim-studio">
+      {/* ═══ Header ═══ */}
+      <DesignStudioHeader
+        onBack={() => navigate('/bim')}
         onSave={handleSave}
         saving={saving}
         hasUnsavedChanges={hasUnsavedChanges}
-        onBack={() => navigate('/bim')}
-        onAction={handleRibbonAction}
-        showSearch={showSearch}
-        onToggleSearch={() => setShowSearch(!showSearch)}
+        onExport={() => {}}
+        onShare={() => {}}
+        onToggleFullscreen={handleToggleFullscreen}
+        activeViewTab={activeViewTab}
+        onViewTabChange={handleViewTabChange}
       />
 
-      {/* Main Content Area */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left Panel — Component Library */}
+      {/* ═══ Toolbar ═══ */}
+      <DesignStudioToolbar
+        onToggleLeft={() => dispatch(toggleComponentLibrary())}
+        onToggleRight={() => dispatch(togglePropertiesPanel())}
+        showLeft={showComponentLibrary}
+        showRight={showPropertiesPanel}
+      />
+
+      {/* ═══ Main Content ═══ */}
+      <div className="bim-content">
+
+        {/* ─── Left Panel ─── */}
         {showComponentLibrary && (
           <>
-            <div
-              className="border-r border-surface-800/50 bg-surface-900 flex flex-col overflow-hidden"
-              style={{ width: leftPanelWidth }}
-            >
-              {/* Floor Selector */}
-              <div className="px-3 py-2 border-b border-surface-800/50">
-                <label className="text-[9px] text-surface-500 font-semibold uppercase tracking-wider mb-1 block">Building / Floor</label>
-                <select
-                  className="w-full bg-surface-800/50 border border-surface-700/50 rounded-lg px-2 py-1.5 text-[11px] text-surface-200 focus:ring-1 focus:ring-primary-500/50 outline-none"
-                  value={activeFloorId || ''}
-                  onChange={(e) => dispatch(setActiveFloor(e.target.value))}
-                >
-                  {activeProject?.buildings?.map(building => (
-                    building.floors?.map(floor => (
-                      <option key={floor._id} value={floor._id}>
-                        {building.name} — {floor.floor_name}
-                      </option>
-                    ))
-                  ))}
-                </select>
+            <div className="bim-panel bim-panel--left" style={{ width: leftPanelWidth }}>
+              {/* Left panel tab switcher */}
+              <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                {[
+                  { id: 'library', label: 'Components' },
+                  { id: 'floors', label: 'Floors' },
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setLeftTab(tab.id)}
+                    style={{
+                      flex: 1, padding: '8px 4px', fontSize: 10, fontWeight: 600,
+                      textTransform: 'uppercase', letterSpacing: '0.05em',
+                      color: leftTab === tab.id ? '#5EEAD4' : '#475569',
+                      background: 'transparent', border: 'none',
+                      borderBottom: leftTab === tab.id ? '2px solid #0D9488' : '2px solid transparent',
+                      cursor: 'pointer', transition: 'all 0.12s',
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
               </div>
 
-              <ComponentLibrary />
+              {/* Left panel content */}
+              <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                {leftTab === 'library' && <ComponentLibrary />}
+                {leftTab === 'floors' && <LevelManager />}
+              </div>
             </div>
 
-            {/* Left Resize Handle */}
-            <div
-              onMouseDown={startResizeLeft}
-              className="w-1 cursor-col-resize hover:bg-primary-500/30 active:bg-primary-500/50 transition-colors flex-shrink-0"
-            />
+            {/* Left resize handle */}
+            <div className="bim-panel__resize" onMouseDown={startResizeLeft} />
           </>
         )}
 
-        {/* Center — Canvas / 3D View */}
-        <div className="flex-1 flex flex-col relative overflow-hidden">
-          {/* View Toggle */}
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 bg-surface-900/90 backdrop-blur-sm rounded-xl p-1 border border-surface-700/50 shadow-lg">
-            <button
-              onClick={() => dispatch(setViewMode(VIEW_MODES.PLAN_2D))}
-              className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === VIEW_MODES.PLAN_2D ? 'bg-primary-600 text-white shadow-md' : 'text-surface-400 hover:text-white hover:bg-surface-800'}`}
-            >
-              <Grid3X3 className="w-3.5 h-3.5 inline mr-1.5" />2D Plan
-            </button>
-            <button
-              onClick={() => dispatch(setViewMode(VIEW_MODES.VIEW_3D))}
-              className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === VIEW_MODES.VIEW_3D ? 'bg-primary-600 text-white shadow-md' : 'text-surface-400 hover:text-white hover:bg-surface-800'}`}
-            >
-              <Box className="w-3.5 h-3.5 inline mr-1.5" />3D View
-            </button>
-          </div>
-
+        {/* ─── Center — Viewport ─── */}
+        <div className="bim-viewport">
           {/* Zoom Controls */}
-          <div className="absolute top-3 right-3 z-20 flex flex-col gap-1 bg-surface-900/90 backdrop-blur-sm rounded-xl p-1 border border-surface-700/50">
-            <button onClick={() => dispatch(setZoom(zoom * 1.3))} className="p-1.5 hover:bg-surface-800 rounded-lg" title="Zoom In"><ZoomIn className="w-4 h-4 text-surface-400" /></button>
-            <button onClick={() => dispatch(setZoom(1))} className="p-1.5 hover:bg-surface-800 rounded-lg" title="Fit"><Maximize2 className="w-4 h-4 text-surface-400" /></button>
-            <button onClick={() => dispatch(setZoom(zoom / 1.3))} className="p-1.5 hover:bg-surface-800 rounded-lg" title="Zoom Out"><ZoomOut className="w-4 h-4 text-surface-400" /></button>
+          <div className="bim-viewport__zoom">
+            <button onClick={() => dispatch(setZoom(zoom * 1.3))} className="bim-viewport__zoom-btn" title="Zoom In">
+              <ZoomIn className="w-4 h-4" />
+            </button>
+            <button onClick={() => dispatch(setZoom(1))} className="bim-viewport__zoom-btn" title="Fit View">
+              <Maximize2 className="w-4 h-4" />
+            </button>
+            <button onClick={() => dispatch(setZoom(zoom / 1.3))} className="bim-viewport__zoom-btn" title="Zoom Out">
+              <ZoomOut className="w-4 h-4" />
+            </button>
           </div>
 
-          {/* Canvas */}
-          <div className="flex-1 relative">
+          {/* Canvas / 3D View */}
+          <div className="bim-viewport__canvas">
             {viewMode === VIEW_MODES.PLAN_2D ? (
               <FloorPlanCanvas onCursorMove={setCursorPos} />
             ) : (
               <Building3DView />
             )}
           </div>
-
-          {/* Status Bar */}
-          <div className="h-7 flex items-center justify-between px-3 bg-surface-900/90 border-t border-surface-800/50 text-[10px]">
-            <div className="flex items-center gap-4 text-surface-500">
-              <span className="flex items-center gap-1">
-                <MapPin className="w-3 h-3" />
-                X: {Math.round(cursorPos.x)} Y: {Math.round(cursorPos.y)}
-              </span>
-              <span>Zoom: {Math.round(zoom * 100)}%</span>
-              <span className="text-surface-400 font-medium">{currentFloor?.floor_name || '—'}</span>
-            </div>
-            <div className="flex items-center gap-4 text-surface-500">
-              <span>{totalElements} elements</span>
-              {currentFloor?.total_area > 0 && (
-                <span>{currentFloor.total_area.toLocaleString()} sq.ft</span>
-              )}
-              <span className="flex items-center gap-1">
-                <Layers className="w-3 h-3" />
-                {layers.filter(l => l.visible).length}/{layers.length}
-              </span>
-              {lastSaved && (
-                <span className="text-green-500 flex items-center gap-1">
-                  <Save className="w-3 h-3" /> Saved
-                </span>
-              )}
-              {hasUnsavedChanges && !saving && (
-                <span className="text-amber-500 flex items-center gap-1 animate-pulse">● Unsaved</span>
-              )}
-              {saving && (
-                <span className="text-amber-400 animate-pulse">Saving...</span>
-              )}
-              <button onClick={() => setShowShortcuts(true)} className="hover:text-white transition-colors" title="Keyboard Shortcuts">
-                <Keyboard className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
         </div>
 
-        {/* Right Panel — Inspector */}
+        {/* ─── Right Panel ─── */}
         {showPropertiesPanel && (
           <>
-            {/* Right Resize Handle */}
-            <div
-              onMouseDown={startResizeRight}
-              className="w-1 cursor-col-resize hover:bg-primary-500/30 active:bg-primary-500/50 transition-colors flex-shrink-0"
-            />
+            {/* Right resize handle */}
+            <div className="bim-panel__resize" onMouseDown={startResizeRight} />
 
-            <div
-              className="border-l border-surface-800/50 bg-surface-900 flex flex-col overflow-hidden"
-              style={{ width: rightPanelWidth }}
-            >
+            <div className="bim-panel bim-panel--right" style={{ width: rightPanelWidth }}>
               <InspectorPanel />
             </div>
           </>
         )}
       </div>
 
-      {/* Keyboard Shortcuts Modal */}
+      {/* ═══ Status Bar ═══ */}
+      <div className="bim-statusbar">
+        <div className="bim-statusbar__group">
+          <span className="bim-statusbar__item">
+            <MapPin className="w-3 h-3" />
+            X: {Math.round(cursorPos.x)} Y: {Math.round(cursorPos.y)}
+          </span>
+          <span className="bim-statusbar__item">Zoom: {Math.round(zoom * 100)}%</span>
+          <span className="bim-statusbar__item" style={{ color: '#94A3B8', fontWeight: 500 }}>
+            {currentFloor?.floor_name || '—'}
+          </span>
+        </div>
+        <div className="bim-statusbar__group">
+          <span className="bim-statusbar__item">{totalElements} elements</span>
+          {currentFloor?.total_area > 0 && (
+            <span className="bim-statusbar__item">{currentFloor.total_area.toLocaleString()} sq.ft</span>
+          )}
+          <span className="bim-statusbar__item">
+            <Layers className="w-3 h-3" />
+            {layers.filter(l => l.visible).length}/{layers.length}
+          </span>
+          {lastSaved && !hasUnsavedChanges && (
+            <span className="bim-statusbar__item bim-statusbar__item--saved">
+              <Save className="w-3 h-3" /> Saved
+            </span>
+          )}
+          {hasUnsavedChanges && !saving && (
+            <span className="bim-statusbar__item bim-statusbar__item--unsaved">● Unsaved</span>
+          )}
+          {saving && (
+            <span className="bim-statusbar__item" style={{ color: '#FBBF24' }}>Saving...</span>
+          )}
+          <button
+            onClick={() => setShowShortcuts(true)}
+            style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', padding: 0, display: 'flex' }}
+            title="Keyboard Shortcuts"
+          >
+            <Keyboard className="w-3 h-3" />
+          </button>
+        </div>
+      </div>
+
+      {/* ═══ Keyboard Shortcuts Modal ═══ */}
       {showShortcuts && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowShortcuts(false)}>
-          <div className="bg-surface-900 rounded-2xl border border-surface-700 p-6 max-w-lg w-full mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-              <Keyboard className="w-5 h-5 text-primary-400" /> Keyboard Shortcuts
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+          }}
+          onClick={() => setShowShortcuts(false)}
+        >
+          <div
+            style={{
+              background: '#1E293B', borderRadius: 16,
+              border: '1px solid rgba(255,255,255,0.1)',
+              padding: 24, maxWidth: 520, width: '90%',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#F1F5F9', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Keyboard className="w-5 h-5" style={{ color: '#5EEAD4' }} /> Keyboard Shortcuts
             </h3>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm max-h-96 overflow-y-auto">
-              {Object.entries(KEYBOARD_SHORTCUTS).map(([key, label]) => (
-                <div key={key} className="flex items-center justify-between py-1 border-b border-surface-800/30">
-                  <span className="text-surface-400 text-xs">{label}</span>
-                  <kbd className="px-2 py-0.5 bg-surface-800 rounded text-[10px] text-surface-300 border border-surface-700 font-mono ml-2">{key}</kbd>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 24px', maxHeight: 400, overflowY: 'auto' }}>
+              {[
+                ['Ctrl+Z', 'Undo'], ['Ctrl+Y', 'Redo'], ['Ctrl+S', 'Save'],
+                ['Delete', 'Delete Selected'], ['Escape', 'Deselect'],
+                ['W', 'Wall Tool'], ['C', 'Column'], ['D', 'Door'],
+                ['N', 'Window'], ['S', 'Stair'], ['F', 'Furniture'],
+                ['M', 'Measure'], ['V', 'Select'], ['T', 'Move'],
+                ['R', 'Rotate'], ['2', '2D View'], ['3', '3D View'],
+                ['+', 'Zoom In'], ['-', 'Zoom Out'],
+              ].map(([key, label]) => (
+                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                  <span style={{ fontSize: 11, color: '#94A3B8' }}>{label}</span>
+                  <kbd style={{
+                    padding: '2px 8px', background: '#0F172A', borderRadius: 4,
+                    fontSize: 10, color: '#CBD5E1', border: '1px solid rgba(255,255,255,0.1)',
+                    fontFamily: 'monospace',
+                  }}>{key}</kbd>
                 </div>
               ))}
             </div>
             <button
               onClick={() => setShowShortcuts(false)}
-              className="mt-4 w-full py-2 bg-surface-800 hover:bg-surface-700 rounded-lg text-sm text-surface-300 transition-colors"
+              style={{
+                marginTop: 16, width: '100%', padding: '8px 0',
+                background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: 8,
+                color: '#94A3B8', fontSize: 12, cursor: 'pointer',
+              }}
             >
               Close
             </button>

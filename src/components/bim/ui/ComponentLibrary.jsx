@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { setActiveTool, addElementLocal, pushUndo } from '../../../redux/slices/bimSlice';
+import { setActiveTool, setToolSettings, addElementLocal, pushUndo } from '../../../redux/slices/bimSlice';
 import {
-  COMPONENT_CATEGORIES, FURNITURE_CATALOG, LANDSCAPE_CATALOG,
+  COMPONENT_CATEGORIES, TOOLS, FURNITURE_CATALOG, LANDSCAPE_CATALOG,
   EQUIPMENT_CATALOG, FIRE_SAFETY_CATALOG, SMART_DEVICES_CATALOG,
   WALL_PRESETS, DOOR_PRESETS, WINDOW_PRESETS, COLUMN_PRESETS, STAIR_PRESETS,
 } from '../../../utils/bimConstants';
@@ -106,13 +106,50 @@ export default function ComponentLibrary() {
     return count;
   };
 
+  const handlePresetClick = (preset) => {
+    // Check if this preset belongs to a known structural preset list
+    const wallIdx = WALL_PRESETS.indexOf(preset);
+    if (wallIdx !== -1) {
+      dispatch(setToolSettings({ wallThickness: preset.thickness, wallType: preset.type }));
+      dispatch(setActiveTool(TOOLS.WALL));
+      return;
+    }
+    const colIdx = COLUMN_PRESETS.indexOf(preset);
+    if (colIdx !== -1) {
+      dispatch(setToolSettings({ columnPreset: colIdx }));
+      dispatch(setActiveTool(TOOLS.COLUMN));
+      return;
+    }
+    const doorIdx = DOOR_PRESETS.indexOf(preset);
+    if (doorIdx !== -1) {
+      dispatch(setToolSettings({ doorPreset: doorIdx }));
+      dispatch(setActiveTool(TOOLS.DOOR));
+      return;
+    }
+    const winIdx = WINDOW_PRESETS.indexOf(preset);
+    if (winIdx !== -1) {
+      dispatch(setToolSettings({ windowPreset: winIdx }));
+      dispatch(setActiveTool(TOOLS.WINDOW));
+      return;
+    }
+    const stairIdx = STAIR_PRESETS.indexOf(preset);
+    if (stairIdx !== -1) {
+      dispatch(setActiveTool(TOOLS.STAIR));
+      return;
+    }
+    // If it has a tool property, activate that tool
+    if (preset.tool) {
+      dispatch(setActiveTool(preset.tool));
+      return;
+    }
+    // Otherwise, place as a catalog item (furniture/landscape/equipment etc.)
+    handlePlaceItem(preset);
+  };
+
   const renderPresetItem = (preset, index) => (
     <button
       key={index}
-      onClick={() => {
-        if (preset.tool) dispatch(setActiveTool(preset.tool));
-        else handlePlaceItem(preset);
-      }}
+      onClick={() => handlePresetClick(preset)}
       className="flex items-center gap-2 w-full px-2 py-1.5 text-left rounded-md hover:bg-surface-700/50 transition-colors group"
     >
       <div className="w-7 h-7 rounded bg-surface-700/50 border border-surface-600/30 flex items-center justify-center flex-shrink-0">

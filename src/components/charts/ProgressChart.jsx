@@ -1,12 +1,12 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const GRADIENT_COLORS = [
-  { start: '#3b82f6', end: '#2563eb' },
-  { start: '#06b6d4', end: '#0891b2' },
-  { start: '#10b981', end: '#059669' },
-  { start: '#f59e0b', end: '#d97706' },
-  { start: '#8b5cf6', end: '#7c3aed' },
-  { start: '#ef4444', end: '#dc2626' },
+  { start: '#0D9488', end: '#2563eb' },
+  { start: '#0891B2', end: '#0891b2' },
+  { start: '#059669', end: '#059669' },
+  { start: '#D97706', end: '#d97706' },
+  { start: '#7C3AED', end: '#7c3aed' },
+  { start: '#DC2626', end: '#dc2626' },
 ];
 
 const CustomTooltip = ({ active, payload, label }) => {

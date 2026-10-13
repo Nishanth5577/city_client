@@ -17,6 +17,7 @@ import {
   GitBranch, FileText, Download, Braces, Save,
   ChevronLeft, Flame, Settings, Wifi, PanelLeftClose, PanelRightClose,
   Search, Keyboard,
+  FileOutput, FileInput, Eye, List, Activity, Database, GitCompare, History,
 } from 'lucide-react';
 
 const ICON_MAP = {
@@ -28,6 +29,7 @@ const ICON_MAP = {
   Layers, Scissors, ClipboardList, IndianRupee, Maximize2,
   AlertTriangle, Compass, ShieldCheck, UserPlus, MessageSquare,
   GitBranch, FileText, Download, Braces, Save,
+  FileOutput, FileInput, Eye, List, Activity, Database, GitCompare, History,
 };
 
 export default function TopRibbon({

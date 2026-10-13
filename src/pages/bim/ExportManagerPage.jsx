@@ -366,14 +366,14 @@ function generatePDFReport(project) {
 <html><head><title>${project.project_name} — BIM Report</title>
 <style>
   body { font-family: 'Segoe UI', sans-serif; max-width: 800px; margin: 40px auto; color: #1a1a2e; }
-  h1 { border-bottom: 3px solid #3B82F6; padding-bottom: 10px; }
-  h2 { color: #3B82F6; margin-top: 30px; }
+  h1 { border-bottom: 3px solid #0D9488; padding-bottom: 10px; }
+  h2 { color: #0D9488; margin-top: 30px; }
   table { width: 100%; border-collapse: collapse; margin: 15px 0; }
   th, td { border: 1px solid #e2e8f0; padding: 8px 12px; text-align: left; }
   th { background: #f1f5f9; font-weight: 600; }
   .meta { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin: 15px 0; }
   .meta div { background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; }
-  .meta span { font-size: 12px; color: #64748b; }
+  .meta span { font-size: 12px; color: #57534E; }
   .meta p { font-size: 18px; font-weight: 700; margin: 4px 0 0; }
   .footer { text-align: center; margin-top: 40px; color: #94a3b8; font-size: 12px; border-top: 1px solid #e2e8f0; padding-top: 15px; }
   @media print { body { margin: 20px; } }

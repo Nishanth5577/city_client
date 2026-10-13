@@ -124,9 +124,27 @@ const bimService = {
   getActiveCollaborators: (projectId) => api.get(`${BIM_BASE}/collab/active`, { params: { bim_project_id: projectId } }),
   updateCursorPosition: (data) => api.put(`${BIM_BASE}/collab/cursor`, data),
 
-  // Exports
+  // Exports (existing)
   exportProject: (projectId, format) => api.get(`${BIM_BASE}/exports/${projectId}`, { params: { format } }),
   exportFloor: (floorId) => api.get(`${BIM_BASE}/exports/floor/${floorId}`),
+
+  // ═══════ Bonsai / IFC Integration ═══════
+  // Service status
+  getBonsaiStatus: () => api.get(`${BIM_BASE}/bonsai/status`),
+  getIFCSchemaInfo: () => api.get(`${BIM_BASE}/bonsai/schema`),
+
+  // Export to IFC
+  exportToIFC: (projectId, config = {}) => api.post(`${BIM_BASE}/bonsai/export/${projectId}`, config),
+  getIFCExports: (projectId) => api.get(`${BIM_BASE}/bonsai/exports/${projectId}`),
+  deleteIFCExport: (id) => api.delete(`${BIM_BASE}/bonsai/exports/${id}`),
+  downloadIFC: (filename) => api.get(`${BIM_BASE}/bonsai/download/${filename}`, { responseType: 'blob' }),
+
+  // Import IFC
+  importIFC: (formData) => api.post(`${BIM_BASE}/bonsai/import`, formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }),
+  parseIFC: (formData) => api.post(`${BIM_BASE}/bonsai/parse`, formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }),
+
+  // Validate IFC
+  validateIFC: (exportId) => api.post(`${BIM_BASE}/bonsai/validate/${exportId}`),
 };
 
 export default bimService;

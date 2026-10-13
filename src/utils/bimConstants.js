@@ -59,6 +59,7 @@ export const VIEW_MODES = {
   PLAN_2D: '2d',
   VIEW_3D: '3d',
   SPLIT: 'split',
+  IFC: 'ifc',
 };
 
 export const RENDER_MODES = {
@@ -406,6 +407,7 @@ export const KEYBOARD_SHORTCUTS = {
   'N': 'Window Tool', 'S': 'Stair Tool', 'F': 'Furniture Tool',
   'M': 'Measure Tool', 'V': 'Select Tool',
   'T': 'Move (Translate)', 'R': 'Rotate', 'E': 'Scale',
+  'P': 'Walk-through Mode',
   'Space': 'Pan', 'G': 'Toggle Grid', 'L': 'Toggle Layers',
   '+': 'Zoom In', '-': 'Zoom Out',
   '2': '2D View', '3': '3D View',
@@ -534,6 +536,25 @@ export const RIBBON_TABS = [
         { action: 'export_gltf', label: 'GLTF', icon: 'Download' },
         { action: 'export_json', label: 'JSON', icon: 'Braces' },
         { action: 'save', label: 'Save', icon: 'Save', shortcut: 'Ctrl+S' },
+      ]},
+    ],
+  },
+  {
+    id: 'bim_ifc', name: 'Bonsai / IFC', groups: [
+      { name: 'IFC Export', tools: [
+        { action: 'export_ifc', label: 'Export IFC', icon: 'FileOutput' },
+        { action: 'ifc_exports_history', label: 'History', icon: 'History' },
+        { action: 'validate_ifc', label: 'Validate', icon: 'ShieldCheck' },
+      ]},
+      { name: 'IFC Import', tools: [
+        { action: 'import_ifc', label: 'Import IFC', icon: 'FileInput' },
+        { action: 'view_ifc', label: 'IFC Viewer', icon: 'Eye' },
+        { action: 'ifc_properties', label: 'Properties', icon: 'List' },
+      ]},
+      { name: 'Bonsai', tools: [
+        { action: 'bonsai_status', label: 'Status', icon: 'Activity' },
+        { action: 'ifc_schema', label: 'Schema', icon: 'Database' },
+        { action: 'ifc_diff', label: 'Compare', icon: 'GitCompare' },
       ]},
     ],
   },

@@ -103,7 +103,7 @@ function WallLayer({ shape, depth, offsetZ, materialName, color, renderMode }) {
         metalness: tex.metalness ?? 0,
       };
     }
-    return { color: color || '#C4A882', roughness: 0.8, metalness: 0 };
+    return { color: color || '#F0E8D8', roughness: 0.85, metalness: 0 };
   }, [materialName, color, renderMode]);
 
   return (
@@ -119,7 +119,7 @@ function Skirting({ length, height = 0.1, depth = 0.012, renderMode }) {
   return (
     <mesh position={[length / 2, height / 2, 0]} castShadow>
       <boxGeometry args={[length, height, depth]} />
-      <meshStandardMaterial color="#F5F0E0" roughness={0.5} />
+      <meshStandardMaterial color="#C8A882" roughness={0.5} />
     </mesh>
   );
 }
@@ -162,6 +162,10 @@ const ProceduralWall = memo(function ProceduralWall({
   const isExterior = wall.wall_type === 'exterior' || wall.wall_type === 'shear';
   const coreMaterial = isExterior ? 'brick' : 'concrete';
   const finishMaterial = wall.paint_color ? `paint_${wall.paint_color}` : (isExterior ? 'plaster_cream' : 'paint_white');
+  // Warm architectural colors matching the reference render
+  const innerColor = wall.paint_color || (isExterior ? '#F2EBE0' : '#F5F0EA');
+  const coreColor = wall.color || (isExterior ? '#C8946E' : '#D4C4B0');
+  const outerColor = isExterior ? '#EDE5D8' : innerColor;
 
   return (
     <group
@@ -175,7 +179,7 @@ const ProceduralWall = memo(function ProceduralWall({
         depth={plasterT}
         offsetZ={0}
         materialName={finishMaterial}
-        color="#F5F0E8"
+        color={innerColor}
         renderMode={renderMode}
       />
 
@@ -185,7 +189,7 @@ const ProceduralWall = memo(function ProceduralWall({
         depth={coreT}
         offsetZ={plasterT}
         materialName={coreMaterial}
-        color={wall.color || '#B85C38'}
+        color={coreColor}
         renderMode={renderMode}
       />
 
@@ -195,7 +199,7 @@ const ProceduralWall = memo(function ProceduralWall({
         depth={plasterT}
         offsetZ={plasterT + coreT}
         materialName={isExterior ? 'plaster_cream' : finishMaterial}
-        color="#F0E8D8"
+        color={outerColor}
         renderMode={renderMode}
       />
 

@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { fetchBIMProjects } from '../../redux/slices/bimSlice';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft, Sparkles, Wand2, Home, LayoutGrid, Compass, Sun, Lightbulb,
-  CheckCircle2, AlertTriangle, Info, ArrowRight, RefreshCw, Download, ChevronDown
+  CheckCircle2, AlertTriangle, Info, ArrowRight, RefreshCw, Download, ChevronDown,
+  Printer, FileImage, Car, TreePine, BookOpen, DollarSign, Layers, Save
 } from 'lucide-react';
 import api from '../../services/api';
 
@@ -22,12 +23,15 @@ export default function AIArchitectPage() {
   const dispatch = useDispatch();
   const { projects } = useSelector(s => s.bim);
   const [selectedProject, setSelectedProject] = useState('');
+  const svgRef = useRef(null);
 
-  // AI Plan Generation form
   const [formData, setFormData] = useState({
     unit_type: '2BHK', total_area_sqft: 1000, plot_width_ft: 40, plot_depth_ft: 25,
     facing: 'North', vastu_compliant: true, style: 'modern',
+    num_floors: 1, design_name: '',
     include_pooja: false, include_study: false, include_servant: false,
+    include_parking: false, include_store: false, include_garden: false,
+    budget_lakhs: 30,
   });
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -53,12 +57,30 @@ export default function AIArchitectPage() {
   const handleSaveAndOpen = async () => {
     setSaving(true);
     try {
-      const { data } = await api.post('/api/bim/ai/generate-and-save', {
-        ...formData,
-        design_name: `AI ${formData.unit_type} — ${formData.total_area_sqft} sqft`,
-      });
-      toast.success('Project saved! Opening in BIM Studio...');
-      setTimeout(() => navigate(`/bim/studio/${data.bim_project._id}`), 800);
+      const designName = formData.design_name?.trim() || `AI ${formData.unit_type} — ${formData.total_area_sqft} sqft`;
+      const { data } = await api.post('/api/bim/ai/generate-and-save', { ...formData, design_name: designName });
+      const projectId = data.bim_project?._id || data.bim_project?.id;
+      if (projectId) {
+        toast.success('Project saved! Opening in BIM Studio...');
+        setTimeout(() => navigate(`/bim/studio/${projectId}`), 600);
+      } else {
+        toast.success('Project saved successfully!');
+        dispatch(fetchBIMProjects());
+      }
+    } catch (err) {
+      console.error('Save error:', err);
+      toast.error(err.response?.data?.message || 'Failed to save. Check console for details.');
+    }
+    setSaving(false);
+  };
+
+  const handleSaveOnly = async () => {
+    setSaving(true);
+    try {
+      const designName = formData.design_name?.trim() || `AI ${formData.unit_type} — ${formData.total_area_sqft} sqft`;
+      await api.post('/api/bim/ai/generate-and-save', { ...formData, design_name: designName });
+      toast.success('Floor plan saved to BIM Projects!');
+      dispatch(fetchBIMProjects());
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to save project');
     }
@@ -66,17 +88,10 @@ export default function AIArchitectPage() {
   };
 
   const fetchSuggestions = async (pid) => {
-    try {
-      const { data } = await api.get(`/api/bim/ai/suggestions/${pid}`);
-      setSuggestions(data);
-    } catch (err) { toast.error('Failed to load suggestions'); }
+    try { const { data } = await api.get(`/api/bim/ai/suggestions/${pid}`); setSuggestions(data); } catch { toast.error('Failed to load suggestions'); }
   };
-
   const fetchVastu = async (pid) => {
-    try {
-      const { data } = await api.get(`/api/bim/ai/vastu/${pid}`, { params: { facing: formData.facing } });
-      setVastuResult(data);
-    } catch (err) { toast.error('Failed to load Vastu analysis'); }
+    try { const { data } = await api.get(`/api/bim/ai/vastu/${pid}`, { params: { facing: formData.facing } }); setVastuResult(data); } catch { toast.error('Failed to load Vastu analysis'); }
   };
 
   useEffect(() => {
@@ -86,42 +101,126 @@ export default function AIArchitectPage() {
 
   const updateForm = (key, val) => setFormData(f => ({ ...f, [key]: val }));
 
+  // ═══ Download Floor Plan as PNG (FULL IMAGE) ═══
+  const handleDownload = useCallback((format = 'png') => {
+    const svgEl = svgRef.current;
+    if (!svgEl) return;
+
+    // Clone SVG and set explicit dimensions from viewBox
+    const clone = svgEl.cloneNode(true);
+    const vb = svgEl.viewBox?.baseVal;
+    const svgW = vb?.width || svgEl.getBoundingClientRect().width || 1200;
+    const svgH = vb?.height || svgEl.getBoundingClientRect().height || 800;
+    clone.setAttribute('width', svgW);
+    clone.setAttribute('height', svgH);
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+
+    const svgData = new XMLSerializer().serializeToString(clone);
+    const fileName = `Floor_Plan_${generatedPlan?.unit_type || 'AI'}_${generatedPlan?.total_area_sqft || ''}sqft`;
+
+    if (format === 'svg') {
+      // Direct SVG download
+      const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${fileName}.svg`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success('SVG downloaded!');
+      return;
+    }
+
+    // PNG download using data URL for correct dimensions
+    const svgBase64 = btoa(unescape(encodeURIComponent(svgData)));
+    const dataUrl = `data:image/svg+xml;base64,${svgBase64}`;
+    const img = new Image();
+    const scale = 4; // 4x for high-res print quality
+
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = svgW * scale;
+      canvas.height = svgH * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, svgW * scale, svgH * scale);
+
+      canvas.toBlob((blob) => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${fileName}.png`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        toast.success('High-res PNG downloaded!');
+      }, 'image/png', 1.0);
+    };
+    img.onerror = () => toast.error('Failed to render image. Try SVG download instead.');
+    img.src = dataUrl;
+  }, [generatedPlan]);
+
+  // ═══ Print Floor Plan ═══
+  const handlePrint = useCallback(() => {
+    const svgEl = svgRef.current;
+    if (!svgEl) return;
+    const clone = svgEl.cloneNode(true);
+    const vb = svgEl.viewBox?.baseVal;
+    clone.setAttribute('width', '100%');
+    clone.setAttribute('height', 'auto');
+    const svgData = new XMLSerializer().serializeToString(clone);
+    const printWin = window.open('', '_blank');
+    printWin.document.write(`<html><head><title>Floor Plan - ${generatedPlan?.unit_type}</title><style>body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh}svg{max-width:100%;height:auto}@media print{body{margin:0}}</style></head><body>${svgData}</body></html>`);
+    printWin.document.close();
+    setTimeout(() => { printWin.print(); }, 500);
+  }, [generatedPlan]);
+
   // ═══ Professional CAD-Style SVG Renderer ═══
   const PlanPreview = useMemo(() => {
-    if (!generatedPlan) return null;
-    const { plot_dimensions, rooms, doors, windows, furniture, columns, stairs, walls } = generatedPlan;
-    const pw = plot_dimensions.width_mm;
-    const pd = plot_dimensions.depth_mm;
-    const margin = 120; // SVG margin for dimensions/labels
-    const sc = 520 / Math.max(pw, pd); // scale mm→SVG
-    const svgW = pw * sc + margin * 2 + 200; // extra for legend
-    const svgH = pd * sc + margin * 2 + 80; // extra for title block
-    const ox = margin, oy = margin; // origin offset
-
-    const roomFills = { living: '#E8F4FD', bedroom: '#FDF2E8', kitchen: '#E8FDF0', bathroom: '#F0E8FD', balcony: '#FDFDE8', passage: '#F8F8F8', study: '#E8EDF8', pooja: '#FDF8E0', utility: '#F0F0F0' };
+    if (!generatedPlan?.plot_dimensions) return null;
+    const { plot_dimensions, rooms, doors, windows, furniture, columns, stairs, walls, joineries } = generatedPlan;
+    const pw = plot_dimensions.width_mm || 12000;
+    const pd = plot_dimensions.depth_mm || 7600;
+    const margin = 180;
+    const sc = 560 / Math.max(pw, pd);
+    const legendW = 220;
+    const svgW = pw * sc + margin * 2 + legendW;
+    const svgH = pd * sc + margin * 2 + 100;
+    const ox = margin, oy = margin;
     const toX = (mm) => ox + mm * sc;
     const toY = (mm) => oy + mm * sc;
 
+    const roomFills = {
+      living: '#E8F4FD', bedroom: '#FDF2E8', kitchen: '#E8FDF0', bathroom: '#F0E8FD',
+      balcony: '#FDFDE8', passage: '#F5F5F5', study: '#E8EDF8', pooja: '#FDF8E0',
+      utility: '#F0F0F0', hall: '#EBF0FF', staircase: '#F0F0F0', parking: '#F8F8F8',
+    };
+
+    const ftIn = (mm) => {
+      const ft = mm / 304.8;
+      const whole = Math.floor(ft);
+      const inches = Math.round((ft - whole) * 12);
+      return inches > 0 ? `${whole}'-${inches}"` : `${whole}'-0"`;
+    };
+
     return (
-      <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full mx-auto bg-white" style={{ maxHeight: '700px' }} xmlns="http://www.w3.org/2000/svg">
+      <svg ref={svgRef} viewBox={`0 0 ${svgW} ${svgH}`} className="w-full mx-auto bg-white" style={{ maxHeight: '760px' }} xmlns="http://www.w3.org/2000/svg">
         <defs>
-          <marker id="arrowS" markerWidth="6" markerHeight="4" refX="0" refY="2" orient="auto"><path d="M0,0 L6,2 L0,4" fill="#666" /></marker>
-          <marker id="arrowE" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto"><path d="M6,0 L0,2 L6,4" fill="#666" /></marker>
-          <pattern id="hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="4" stroke="#DDD" strokeWidth="0.5" /></pattern>
+          <marker id="arrowS" markerWidth="6" markerHeight="4" refX="0" refY="2" orient="auto"><path d="M0,0 L6,2 L0,4" fill="#333" /></marker>
+          <marker id="arrowE" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto"><path d="M6,0 L0,2 L6,4" fill="#333" /></marker>
+          <pattern id="hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="4" stroke="#CCC" strokeWidth="0.5" /></pattern>
         </defs>
 
-        {/* ── Grid lines (structural) ── */}
+        {/* ── Grid lines ── */}
         {rooms && (() => {
           const xs = [...new Set(rooms.flatMap(r => [r.x, r.x + r.width]))].sort((a, b) => a - b);
           const ys = [...new Set(rooms.flatMap(r => [r.y, r.y + r.depth]))].sort((a, b) => a - b);
-          return (<g opacity="0.15">
-            {xs.map((x, i) => <line key={`gx${i}`} x1={toX(x)} y1={oy - 30} x2={toX(x)} y2={toY(pd) + 20} stroke="#3B82F6" strokeWidth="0.5" strokeDasharray="8,4" />)}
-            {ys.map((y, i) => <line key={`gy${i}`} x1={ox - 30} y1={toY(y)} x2={toX(pw) + 20} y2={toY(y)} stroke="#3B82F6" strokeWidth="0.5" strokeDasharray="8,4" />)}
+          return (<g opacity="0.12">
+            {xs.map((x, i) => <line key={`gx${i}`} x1={toX(x)} y1={oy - 40} x2={toX(x)} y2={toY(pd) + 30} stroke="#0D9488" strokeWidth="0.4" strokeDasharray="6,3" />)}
+            {ys.map((y, i) => <line key={`gy${i}`} x1={ox - 40} y1={toY(y)} x2={toX(pw) + 30} y2={toY(y)} stroke="#0D9488" strokeWidth="0.4" strokeDasharray="6,3" />)}
           </g>);
         })()}
 
-        {/* ── Plot boundary (dashed) ── */}
-        <rect x={toX(0)} y={toY(0)} width={pw * sc} height={pd * sc} fill="none" stroke="#94A3B8" strokeWidth="1.5" strokeDasharray="10,5" />
+        {/* ── Plot boundary ── */}
+        <rect x={toX(0)} y={toY(0)} width={pw * sc} height={pd * sc} fill="none" stroke="#DC2626" strokeWidth="1.5" strokeDasharray="10,5" />
 
         {/* ── Room fills ── */}
         {rooms?.map((room, i) => (
@@ -129,90 +228,90 @@ export default function AIArchitectPage() {
             fill={roomFills[room.type] || '#F8F8F8'} stroke="none" />
         ))}
 
-        {/* ── Walls (thick lines with proper thickness) ── */}
+        {/* ── Walls ── */}
         {walls?.map((wall, i) => {
           const isExt = wall.wall_type === 'exterior';
-          const t = (wall.thickness || 230) * sc;
+          const t = Math.max((wall.thickness || 230) * sc, isExt ? 4 : 2);
           const x1 = toX(wall.start_point.x), y1 = toY(wall.start_point.y);
           const x2 = toX(wall.end_point.x), y2 = toY(wall.end_point.y);
-          const isHoriz = Math.abs(y1 - y2) < 2;
-          const isVert = Math.abs(x1 - x2) < 2;
-          if (isHoriz) {
+          const isH = Math.abs(y1 - y2) < 2;
+          const isV = Math.abs(x1 - x2) < 2;
+          if (isH) {
             const minX = Math.min(x1, x2), maxX = Math.max(x1, x2);
-            return <rect key={`w${i}`} x={minX} y={y1 - t / 2} width={maxX - minX} height={Math.max(t, isExt ? 3 : 2)} fill={isExt ? '#1A1A1A' : '#404040'} />;
+            return <rect key={`w${i}`} x={minX} y={y1 - t / 2} width={maxX - minX} height={t} fill={isExt ? '#1A1A1A' : '#555'} />;
           }
-          if (isVert) {
+          if (isV) {
             const minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
-            return <rect key={`w${i}`} x={x1 - t / 2} y={minY} width={Math.max(t, isExt ? 3 : 2)} height={maxY - minY} fill={isExt ? '#1A1A1A' : '#404040'} />;
+            return <rect key={`w${i}`} x={x1 - t / 2} y={minY} width={t} height={maxY - minY} fill={isExt ? '#1A1A1A' : '#555'} />;
           }
-          return <line key={`w${i}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#1A1A1A" strokeWidth={isExt ? 3 : 2} />;
+          return <line key={`w${i}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#1A1A1A" strokeWidth={isExt ? 4 : 2} />;
         })}
 
-        {/* ── Columns (filled squares) ── */}
+        {/* ── Columns ── */}
         {columns?.map((col, i) => {
-          const cs = (col.width || 300) * sc;
-          return <rect key={`c${i}`} x={toX(col.position.x) - cs / 2} y={toY(col.position.y) - cs / 2} width={Math.max(cs, 4)} height={Math.max(cs, 4)} fill="#333" stroke="#111" strokeWidth="0.5" />;
+          const cs = Math.max((col.width || 300) * sc, 5);
+          return <rect key={`c${i}`} x={toX(col.position.x) - cs / 2} y={toY(col.position.y) - cs / 2} width={cs} height={cs} fill="#333" stroke="#111" strokeWidth="0.5" />;
         })}
 
-        {/* ── Doors (arc + leaf) ── */}
+        {/* ── Doors ── */}
         {doors?.map((door, i) => {
           const dx = toX(door.position.x), dy = toY(door.position.y);
           const dw = door.width * sc;
-          const isVert = door.rotation === 90;
+          const isV = door.rotation === 90;
           const isMain = door.door_type === 'main';
-          const arcR = dw * 0.9;
-          if (isVert) {
+          const col = isMain ? '#DC2626' : '#2563EB';
+          const arcR = dw * 0.85;
+          if (isV) {
             return (<g key={`d${i}`}>
-              <line x1={dx} y1={dy} x2={dx} y2={dy + dw} stroke="none" />
-              <rect x={dx - 1} y={dy} width={2} height={dw} fill="white" />
-              <line x1={dx} y1={dy} x2={dx + arcR * 0.7} y2={dy} stroke={isMain ? '#DC2626' : '#2563EB'} strokeWidth={isMain ? 1.5 : 1} />
-              <path d={`M ${dx + arcR * 0.7} ${dy} A ${arcR * 0.7} ${arcR * 0.7} 0 0 1 ${dx} ${dy + dw}`} fill="none" stroke={isMain ? '#DC2626' : '#2563EB'} strokeWidth="0.8" strokeDasharray={isMain ? '' : '3,2'} />
+              <rect x={dx - 1.5} y={dy} width={3} height={dw} fill="white" />
+              <line x1={dx} y1={dy} x2={dx + arcR * 0.7} y2={dy} stroke={col} strokeWidth={isMain ? 2 : 1.2} />
+              <path d={`M ${dx + arcR * 0.7} ${dy} A ${arcR * 0.7} ${arcR * 0.7} 0 0 1 ${dx} ${dy + dw}`} fill="none" stroke={col} strokeWidth="0.8" strokeDasharray={isMain ? '' : '3,2'} />
             </g>);
           }
           return (<g key={`d${i}`}>
-            <rect x={dx} y={dy - 1} width={dw} height={2} fill="white" />
-            <line x1={dx} y1={dy} x2={dx} y2={dy - arcR * 0.7} stroke={isMain ? '#DC2626' : '#2563EB'} strokeWidth={isMain ? 1.5 : 1} />
-            <path d={`M ${dx} ${dy - arcR * 0.7} A ${arcR * 0.7} ${arcR * 0.7} 0 0 1 ${dx + dw} ${dy}`} fill="none" stroke={isMain ? '#DC2626' : '#2563EB'} strokeWidth="0.8" strokeDasharray={isMain ? '' : '3,2'} />
+            <rect x={dx} y={dy - 1.5} width={dw} height={3} fill="white" />
+            <line x1={dx} y1={dy} x2={dx} y2={dy - arcR * 0.7} stroke={col} strokeWidth={isMain ? 2 : 1.2} />
+            <path d={`M ${dx} ${dy - arcR * 0.7} A ${arcR * 0.7} ${arcR * 0.7} 0 0 1 ${dx + dw} ${dy}`} fill="none" stroke={col} strokeWidth="0.8" strokeDasharray={isMain ? '' : '3,2'} />
           </g>);
         })}
 
-        {/* ── Windows (3 parallel lines) ── */}
+        {/* ── Windows ── */}
         {windows?.map((win, i) => {
           const wx = toX(win.position.x), wy = toY(win.position.y);
           const ww = win.width * sc;
-          const isVert = win.rotation === 90;
-          const isVent = win.window_type === 'ventilator';
-          const gap = isVent ? 1.5 : 2;
-          if (isVert) {
+          const isV = win.rotation === 90;
+          const gap = win.window_type === 'ventilator' ? 1.5 : 2.5;
+          if (isV) {
             return (<g key={`wn${i}`}>
-              <rect x={wx - gap - 1} y={wy - ww / 2} width={gap * 2 + 2} height={ww} fill="white" />
-              <line x1={wx - gap} y1={wy - ww / 2} x2={wx - gap} y2={wy + ww / 2} stroke="#0EA5E9" strokeWidth="1" />
-              <line x1={wx} y1={wy - ww / 2} x2={wx} y2={wy + ww / 2} stroke="#0EA5E9" strokeWidth="0.5" />
-              <line x1={wx + gap} y1={wy - ww / 2} x2={wx + gap} y2={wy + ww / 2} stroke="#0EA5E9" strokeWidth="1" />
+              <rect x={wx - gap - 1.5} y={wy - ww / 2} width={gap * 2 + 3} height={ww} fill="white" />
+              <line x1={wx - gap} y1={wy - ww / 2} x2={wx - gap} y2={wy + ww / 2} stroke="#2563EB" strokeWidth="1.2" />
+              <line x1={wx} y1={wy - ww / 2} x2={wx} y2={wy + ww / 2} stroke="#2563EB" strokeWidth="0.5" />
+              <line x1={wx + gap} y1={wy - ww / 2} x2={wx + gap} y2={wy + ww / 2} stroke="#2563EB" strokeWidth="1.2" />
             </g>);
           }
           return (<g key={`wn${i}`}>
-            <rect x={wx - ww / 2} y={wy - gap - 1} width={ww} height={gap * 2 + 2} fill="white" />
-            <line x1={wx - ww / 2} y1={wy - gap} x2={wx + ww / 2} y2={wy - gap} stroke="#0EA5E9" strokeWidth="1" />
-            <line x1={wx - ww / 2} y1={wy} x2={wx + ww / 2} y2={wy} stroke="#0EA5E9" strokeWidth="0.5" />
-            <line x1={wx - ww / 2} y1={wy + gap} x2={wx + ww / 2} y2={wy + gap} stroke="#0EA5E9" strokeWidth="1" />
+            <rect x={wx - ww / 2} y={wy - gap - 1.5} width={ww} height={gap * 2 + 3} fill="white" />
+            <line x1={wx - ww / 2} y1={wy - gap} x2={wx + ww / 2} y2={wy - gap} stroke="#2563EB" strokeWidth="1.2" />
+            <line x1={wx - ww / 2} y1={wy} x2={wx + ww / 2} y2={wy} stroke="#2563EB" strokeWidth="0.5" />
+            <line x1={wx - ww / 2} y1={wy + gap} x2={wx + ww / 2} y2={wy + gap} stroke="#2563EB" strokeWidth="1.2" />
           </g>);
         })}
 
-        {/* ── Furniture symbols ── */}
+        {/* ── Furniture ── */}
         {furniture?.map((f, i) => {
           const fx = toX(f.position.x), fy = toY(f.position.y);
           const fw = (f.width || 600) * sc, fd = (f.depth || 600) * sc;
-          const t = f.type || f.furniture_type;
-          if (t === 'bed') return (<g key={`f${i}`}><rect x={fx - fw / 2} y={fy - fd / 2} width={fw} height={fd} fill="none" stroke="#A0A0A0" strokeWidth="0.5" /><rect x={fx - fw / 2 + 2} y={fy - fd / 2 + 2} width={fw / 2 - 3} height={fd * 0.3} fill="none" stroke="#B0B0B0" strokeWidth="0.5" rx="2" /><rect x={fx + 1} y={fy - fd / 2 + 2} width={fw / 2 - 3} height={fd * 0.3} fill="none" stroke="#B0B0B0" strokeWidth="0.5" rx="2" /></g>);
-          if (t === 'sofa') return (<g key={`f${i}`}><rect x={fx - fw / 2} y={fy - fd / 2} width={fw} height={fd} fill="none" stroke="#A0A0A0" strokeWidth="0.5" rx="2" /><rect x={fx - fw / 2 + 2} y={fy - fd / 2 + fd * 0.5} width={fw - 4} height={fd * 0.45} fill="none" stroke="#C0C0C0" strokeWidth="0.3" rx="1" /></g>);
-          if (t === 'toilet') return (<g key={`f${i}`}><ellipse cx={fx} cy={fy + fd * 0.1} rx={fw * 0.4} ry={fd * 0.35} fill="none" stroke="#A0A0A0" strokeWidth="0.5" /><rect x={fx - fw * 0.3} y={fy - fd * 0.45} width={fw * 0.6} height={fd * 0.3} fill="none" stroke="#A0A0A0" strokeWidth="0.5" /></g>);
-          if (t === 'wash_basin') return (<g key={`f${i}`}><ellipse cx={fx} cy={fy} rx={fw * 0.35} ry={fd * 0.3} fill="none" stroke="#A0A0A0" strokeWidth="0.5" /><rect x={fx - fw * 0.4} y={fy - fd * 0.45} width={fw * 0.8} height={fd * 0.9} fill="none" stroke="#B0B0B0" strokeWidth="0.3" rx="2" /></g>);
-          if (t === 'kitchen_cabinets') return (<g key={`f${i}`}><rect x={fx - fw / 2} y={fy - fd / 2} width={fw} height={fd} fill="none" stroke="#A0A0A0" strokeWidth="0.5" /><line x1={fx - fw / 2} y1={fy} x2={fx + fw / 2} y2={fy} stroke="#C0C0C0" strokeWidth="0.3" /><circle cx={fx + fw * 0.15} cy={fy - fd * 0.15} r={fd * 0.12} fill="none" stroke="#B0B0B0" strokeWidth="0.3" /></g>);
-          if (t === 'wardrobe') return (<g key={`f${i}`}><rect x={fx - fw / 2} y={fy - fd / 2} width={fw} height={fd} fill="none" stroke="#A0A0A0" strokeWidth="0.5" /><line x1={fx} y1={fy - fd / 2} x2={fx} y2={fy + fd / 2} stroke="#C0C0C0" strokeWidth="0.3" /></g>);
-          if (t === 'refrigerator') return (<rect key={`f${i}`} x={fx - fw / 2} y={fy - fd / 2} width={fw} height={fd} fill="none" stroke="#A0A0A0" strokeWidth="0.5" rx="1" />);
-          // Generic
-          return <rect key={`f${i}`} x={fx - fw / 2} y={fy - fd / 2} width={fw} height={fd} fill="none" stroke="#C0C0C0" strokeWidth="0.4" strokeDasharray="2,1" />;
+          const t = f.type;
+          if (t === 'bed') return (<g key={`f${i}`}><rect x={fx - fw / 2} y={fy - fd / 2} width={fw} height={fd} fill="none" stroke="#888" strokeWidth="0.6" /><rect x={fx - fw / 2 + 2} y={fy - fd / 2 + 2} width={fw / 2 - 3} height={fd * 0.3} fill="none" stroke="#AAA" strokeWidth="0.5" rx="2" /><rect x={fx + 1} y={fy - fd / 2 + 2} width={fw / 2 - 3} height={fd * 0.3} fill="none" stroke="#AAA" strokeWidth="0.5" rx="2" /><rect x={fx - fw / 2 + 3} y={fy - fd / 2 + fd * 0.35} width={fw - 6} height={fd * 0.6} fill="none" stroke="#BBB" strokeWidth="0.3" /></g>);
+          if (t === 'sofa') return (<g key={`f${i}`}><rect x={fx - fw / 2} y={fy - fd / 2} width={fw} height={fd} fill="none" stroke="#888" strokeWidth="0.5" rx="2" /><rect x={fx - fw / 2 + 2} y={fy} width={fw - 4} height={fd * 0.4} fill="none" stroke="#BBB" strokeWidth="0.3" rx="1" /></g>);
+          if (t === 'dining_table') return (<g key={`f${i}`}><rect x={fx - fw / 2} y={fy - fd / 2} width={fw} height={fd} fill="none" stroke="#888" strokeWidth="0.5" rx="1" />{[-1, 1].map(dx => [-1, 1].map(dy => <rect key={`ch${dx}${dy}`} x={fx + dx * fw * 0.3 - 4} y={fy + dy * fd * 0.35 - 4} width={8} height={8} fill="none" stroke="#AAA" strokeWidth="0.4" rx="1" />))}</g>);
+          if (t === 'toilet') return (<g key={`f${i}`}><ellipse cx={fx} cy={fy + fd * 0.1} rx={fw * 0.4} ry={fd * 0.35} fill="none" stroke="#888" strokeWidth="0.5" /><rect x={fx - fw * 0.3} y={fy - fd * 0.45} width={fw * 0.6} height={fd * 0.3} fill="none" stroke="#888" strokeWidth="0.5" /></g>);
+          if (t === 'wash_basin') return (<g key={`f${i}`}><ellipse cx={fx} cy={fy} rx={fw * 0.35} ry={fd * 0.3} fill="none" stroke="#888" strokeWidth="0.5" /><rect x={fx - fw * 0.4} y={fy - fd * 0.45} width={fw * 0.8} height={fd * 0.9} fill="none" stroke="#AAA" strokeWidth="0.3" rx="2" /></g>);
+          if (t === 'kitchen_cabinets') return (<g key={`f${i}`}><rect x={fx - fw / 2} y={fy - fd / 2} width={fw} height={fd} fill="none" stroke="#888" strokeWidth="0.5" /><line x1={fx - fw / 2} y1={fy} x2={fx + fw / 2} y2={fy} stroke="#BBB" strokeWidth="0.3" /><circle cx={fx + fw * 0.15} cy={fy - fd * 0.15} r={Math.max(fd * 0.12, 2)} fill="none" stroke="#AAA" strokeWidth="0.4" /></g>);
+          if (t === 'wardrobe') return (<g key={`f${i}`}><rect x={fx - fw / 2} y={fy - fd / 2} width={fw} height={fd} fill="none" stroke="#888" strokeWidth="0.5" /><line x1={fx} y1={fy - fd / 2} x2={fx} y2={fy + fd / 2} stroke="#BBB" strokeWidth="0.3" /></g>);
+          if (t === 'refrigerator') return (<rect key={`f${i}`} x={fx - fw / 2} y={fy - fd / 2} width={fw} height={fd} fill="none" stroke="#888" strokeWidth="0.5" rx="1" />);
+          if (t === 'car') return (<g key={`f${i}`}><rect x={fx - fw / 2} y={fy - fd / 2} width={fw} height={fd} fill="none" stroke="#999" strokeWidth="0.4" rx="3" /><ellipse cx={fx} cy={fy - fd * 0.25} rx={fw * 0.35} ry={fd * 0.12} fill="none" stroke="#BBB" strokeWidth="0.3" /><ellipse cx={fx} cy={fy + fd * 0.15} rx={fw * 0.38} ry={fd * 0.15} fill="none" stroke="#BBB" strokeWidth="0.3" /></g>);
+          return <rect key={`f${i}`} x={fx - fw / 2} y={fy - fd / 2} width={fw} height={fd} fill="none" stroke="#CCC" strokeWidth="0.4" strokeDasharray="2,1" />;
         })}
 
         {/* ── Staircase ── */}
@@ -222,10 +321,10 @@ export default function AIArchitectPage() {
           const steps = st.num_risers || 12;
           const stepD = sd / steps;
           return (<g key={`st${i}`}>
-            <rect x={sx} y={sy} width={sw} height={sd} fill="none" stroke="#666" strokeWidth="0.8" />
-            {Array.from({ length: steps }).map((_, j) => <line key={j} x1={sx} y1={sy + j * stepD} x2={sx + sw} y2={sy + j * stepD} stroke="#999" strokeWidth="0.3" />)}
-            <line x1={sx + sw / 2} y1={sy + sd} x2={sx + sw / 2} y2={sy + sd * 0.2} stroke="#666" strokeWidth="0.8" markerEnd="url(#arrowS)" />
-            <text x={sx + sw / 2} y={sy + sd / 2} textAnchor="middle" fill="#888" fontSize="5" transform={`rotate(-90 ${sx + sw / 2} ${sy + sd / 2})`}>UP</text>
+            <rect x={sx} y={sy} width={sw} height={sd} fill="none" stroke="#555" strokeWidth="1" />
+            {Array.from({ length: steps }).map((_, j) => <line key={j} x1={sx} y1={sy + j * stepD} x2={sx + sw} y2={sy + j * stepD} stroke="#999" strokeWidth="0.4" />)}
+            <line x1={sx + sw / 2} y1={sy + sd} x2={sx + sw / 2} y2={sy + sd * 0.2} stroke="#DC2626" strokeWidth="1" markerEnd="url(#arrowS)" />
+            <text x={sx + sw / 2} y={sy + sd / 2} textAnchor="middle" fill="#555" fontSize="6" fontWeight="bold" transform={`rotate(-90 ${sx + sw / 2} ${sy + sd / 2})`}>UP</text>
           </g>);
         })}
 
@@ -234,95 +333,154 @@ export default function AIArchitectPage() {
           const cx = toX(room.x + room.width / 2);
           const cy = toY(room.y + room.depth / 2);
           return (<g key={`rl${i}`}>
-            <text x={cx} y={cy - 5} textAnchor="middle" fill="#1E293B" fontSize="6.5" fontWeight="600" fontFamily="Inter, sans-serif">{room.name}</text>
-            <text x={cx} y={cy + 4} textAnchor="middle" fill="#64748B" fontSize="5" fontFamily="Inter, sans-serif">{room.area_sqft || room.actual_area_sqft} sqft</text>
-            <text x={cx} y={cy + 11} textAnchor="middle" fill="#94A3B8" fontSize="4" fontFamily="Inter, sans-serif">{(room.width / 1000).toFixed(1)}m × {(room.depth / 1000).toFixed(1)}m</text>
+            <text x={cx} y={cy - 6} textAnchor="middle" fill="#1E293B" fontSize="7" fontWeight="700" fontFamily="Inter, sans-serif" textTransform="uppercase">{room.name.toUpperCase()}</text>
+            <text x={cx} y={cy + 4} textAnchor="middle" fill="#57534E" fontSize="5" fontFamily="Inter, sans-serif">{room.area_sqft} sqft</text>
+            <text x={cx} y={cy + 12} textAnchor="middle" fill="#94A3B8" fontSize="4.5" fontFamily="Inter, sans-serif">{ftIn(room.width)} × {ftIn(room.depth)}</text>
           </g>);
         })}
 
-        {/* ── Overall dimensions ── */}
+        {/* ── Dimension lines (top) ── */}
         {(() => {
-          const dimY = toY(pd) + 25;
-          const dimX = toX(0) - 25;
-          const eX1 = toX(0), eX2 = toX(pw);
-          const eY1 = toY(0), eY2 = toY(pd);
-          return (<g fill="#666" fontSize="5" fontFamily="Inter, sans-serif">
-            {/* Bottom dimension */}
-            <line x1={eX1} y1={dimY - 5} x2={eX1} y2={dimY + 5} stroke="#888" strokeWidth="0.4" />
-            <line x1={eX2} y1={dimY - 5} x2={eX2} y2={dimY + 5} stroke="#888" strokeWidth="0.4" />
-            <line x1={eX1} y1={dimY} x2={eX2} y2={dimY} stroke="#888" strokeWidth="0.5" markerStart="url(#arrowE)" markerEnd="url(#arrowS)" />
-            <text x={(eX1 + eX2) / 2} y={dimY - 3} textAnchor="middle" fill="#555" fontSize="5.5" fontWeight="500">{(pw / 1000).toFixed(1)}m ({generatedPlan.plot_dimensions.width_ft} ft)</text>
-            {/* Left dimension */}
-            <line x1={dimX - 5} y1={eY1} x2={dimX + 5} y2={eY1} stroke="#888" strokeWidth="0.4" />
-            <line x1={dimX - 5} y1={eY2} x2={dimX + 5} y2={eY2} stroke="#888" strokeWidth="0.4" />
-            <line x1={dimX} y1={eY1} x2={dimX} y2={eY2} stroke="#888" strokeWidth="0.5" markerStart="url(#arrowE)" markerEnd="url(#arrowS)" />
-            <text x={dimX - 3} y={(eY1 + eY2) / 2} textAnchor="middle" fill="#555" fontSize="5.5" fontWeight="500" transform={`rotate(-90 ${dimX - 3} ${(eY1 + eY2) / 2})`}>{(pd / 1000).toFixed(1)}m ({generatedPlan.plot_dimensions.depth_ft} ft)</text>
+          const topRooms = rooms?.filter(r => r.y === rooms[0]?.y) || [];
+          const dimY = toY(0) - 30;
+          return (<g fill="#333" fontSize="5" fontFamily="Inter, sans-serif">
+            {topRooms.map((r, i) => {
+              const x1 = toX(r.x), x2 = toX(r.x + r.width);
+              return (<g key={`dtop${i}`}>
+                <line x1={x1} y1={dimY - 5} x2={x1} y2={dimY + 5} stroke="#333" strokeWidth="0.4" />
+                <line x1={x2} y1={dimY - 5} x2={x2} y2={dimY + 5} stroke="#333" strokeWidth="0.4" />
+                <line x1={x1} y1={dimY} x2={x2} y2={dimY} stroke="#333" strokeWidth="0.5" markerStart="url(#arrowE)" markerEnd="url(#arrowS)" />
+                <text x={(x1 + x2) / 2} y={dimY - 4} textAnchor="middle" fill="#333" fontSize="5.5" fontWeight="500">{ftIn(r.width)}</text>
+              </g>);
+            })}
+            {/* Overall width */}
+            {(() => {
+              const totalDimY = dimY - 22;
+              const eX1 = toX(0), eX2 = toX(pw);
+              return (<g>
+                <line x1={eX1} y1={totalDimY - 5} x2={eX1} y2={totalDimY + 5} stroke="#333" strokeWidth="0.4" />
+                <line x1={eX2} y1={totalDimY - 5} x2={eX2} y2={totalDimY + 5} stroke="#333" strokeWidth="0.4" />
+                <line x1={eX1} y1={totalDimY} x2={eX2} y2={totalDimY} stroke="#333" strokeWidth="0.6" markerStart="url(#arrowE)" markerEnd="url(#arrowS)" />
+                <text x={(eX1 + eX2) / 2} y={totalDimY - 4} textAnchor="middle" fill="#1E293B" fontSize="6" fontWeight="600">{generatedPlan.plot_dimensions.width_ft}'-0"</text>
+              </g>);
+            })()}
           </g>);
         })()}
 
-        {/* ── North Arrow (compass rose) ── */}
+        {/* ── Left dimension ── */}
         {(() => {
-          const nax = toX(pw) + 50, nay = oy + 30;
+          const dimX = toX(0) - 35;
+          const eY1 = toY(0), eY2 = toY(pd);
+          return (<g>
+            <line x1={dimX - 5} y1={eY1} x2={dimX + 5} y2={eY1} stroke="#333" strokeWidth="0.4" />
+            <line x1={dimX - 5} y1={eY2} x2={dimX + 5} y2={eY2} stroke="#333" strokeWidth="0.4" />
+            <line x1={dimX} y1={eY1} x2={dimX} y2={eY2} stroke="#333" strokeWidth="0.6" markerStart="url(#arrowE)" markerEnd="url(#arrowS)" />
+            <text x={dimX - 4} y={(eY1 + eY2) / 2} textAnchor="middle" fill="#1E293B" fontSize="6" fontWeight="600" transform={`rotate(-90 ${dimX - 4} ${(eY1 + eY2) / 2})`}>{generatedPlan.plot_dimensions.depth_ft}'-0"</text>
+          </g>);
+        })()}
+
+        {/* ── Title: GROUND FLOOR PLAN ── */}
+        {(() => {
+          const titleY = toY(pd) + 55;
+          const titleX = (toX(0) + toX(pw)) / 2;
+          return (<g fontFamily="Inter, sans-serif">
+            <text x={titleX} y={titleY} textAnchor="middle" fill="#1E293B" fontSize="10" fontWeight="800" letterSpacing="0.5" textDecoration="underline">GROUND FLOOR PLAN</text>
+          </g>);
+        })()}
+
+        {/* ── Compass Rose ── */}
+        {(() => {
+          const nax = toX(pw) + legendW - 40, nay = toY(pd) - 20;
           return (<g transform={`translate(${nax}, ${nay})`}>
-            <circle r="16" fill="none" stroke="#CBD5E1" strokeWidth="0.5" />
-            <polygon points="0,-14 -4,-2 0,-5 4,-2" fill="#DC2626" stroke="#DC2626" strokeWidth="0.5" />
-            <polygon points="0,14 -4,2 0,5 4,2" fill="#CBD5E1" stroke="#94A3B8" strokeWidth="0.5" />
-            <text y="-17" textAnchor="middle" fill="#DC2626" fontSize="6" fontWeight="bold" fontFamily="Inter, sans-serif">N</text>
-            <text y="22" textAnchor="middle" fill="#94A3B8" fontSize="4.5">S</text>
-            <text x="20" y="2" textAnchor="middle" fill="#94A3B8" fontSize="4.5">E</text>
-            <text x="-20" y="2" textAnchor="middle" fill="#94A3B8" fontSize="4.5">W</text>
+            <circle r="18" fill="none" stroke="#CBD5E1" strokeWidth="0.6" />
+            <polygon points="0,-15 -4,-3 0,-6 4,-3" fill="#DC2626" stroke="#DC2626" strokeWidth="0.4" />
+            <polygon points="0,15 -4,3 0,6 4,3" fill="#CBD5E1" stroke="#94A3B8" strokeWidth="0.4" />
+            <text y="-19" textAnchor="middle" fill="#DC2626" fontSize="6.5" fontWeight="bold" fontFamily="Inter">N</text>
+            <text y="24" textAnchor="middle" fill="#94A3B8" fontSize="5">S</text>
+            <text x="22" y="2" textAnchor="middle" fill="#94A3B8" fontSize="5">E</text>
+            <text x="-22" y="2" textAnchor="middle" fill="#94A3B8" fontSize="5">W</text>
           </g>);
         })()}
 
         {/* ── Scale Bar ── */}
         {(() => {
-          const sbx = toX(0), sby = toY(pd) + 50;
+          const sbx = toX(0), sby = toY(pd) + 72;
           const meterPx = 1000 * sc;
           return (<g>
-            <rect x={sbx} y={sby} width={meterPx} height={3} fill="#333" />
-            <rect x={sbx + meterPx} y={sby} width={meterPx} height={3} fill="none" stroke="#333" strokeWidth="0.5" />
-            <text x={sbx} y={sby + 10} textAnchor="start" fill="#555" fontSize="4.5" fontFamily="Inter, sans-serif">0</text>
-            <text x={sbx + meterPx} y={sby + 10} textAnchor="middle" fill="#555" fontSize="4.5" fontFamily="Inter, sans-serif">1m</text>
-            <text x={sbx + meterPx * 2} y={sby + 10} textAnchor="middle" fill="#555" fontSize="4.5" fontFamily="Inter, sans-serif">2m</text>
-            <text x={sbx + meterPx * 2 + 15} y={sby + 10} fill="#888" fontSize="4">SCALE</text>
+            <rect x={sbx} y={sby} width={meterPx} height={3.5} fill="#333" />
+            <rect x={sbx + meterPx} y={sby} width={meterPx} height={3.5} fill="none" stroke="#333" strokeWidth="0.5" />
+            <text x={sbx} y={sby + 12} textAnchor="start" fill="#555" fontSize="4.5" fontFamily="Inter">0</text>
+            <text x={sbx + meterPx} y={sby + 12} textAnchor="middle" fill="#555" fontSize="4.5" fontFamily="Inter">1m</text>
+            <text x={sbx + meterPx * 2} y={sby + 12} textAnchor="middle" fill="#555" fontSize="4.5" fontFamily="Inter">2m</text>
+            <text x={sbx + meterPx * 2 + 18} y={sby + 12} fill="#888" fontSize="4" fontFamily="Inter">SCALE</text>
           </g>);
         })()}
 
-        {/* ── Title Block ── */}
+        {/* ── Right Panel: Project Info + Legend + Joineries ── */}
         {(() => {
-          const tbx = toX(pw) + 30, tby = oy + 70;
+          const px = toX(pw) + 35, py = oy;
+          const panelW = legendW - 45;
           return (<g fontFamily="Inter, sans-serif">
-            <rect x={tbx} y={tby} width={140} height={svgH - tby - 20} fill="none" stroke="#CBD5E1" strokeWidth="0.5" />
-            <text x={tbx + 70} y={tby + 12} textAnchor="middle" fill="#1E293B" fontSize="7" fontWeight="700">AI ARCHITECT</text>
-            <line x1={tbx} y1={tby + 16} x2={tbx + 140} y2={tby + 16} stroke="#CBD5E1" strokeWidth="0.3" />
-            <text x={tbx + 5} y={tby + 26} fill="#64748B" fontSize="4.5">Unit: {generatedPlan.unit_type}</text>
-            <text x={tbx + 5} y={tby + 34} fill="#64748B" fontSize="4.5">Area: {generatedPlan.total_area_sqft} sqft</text>
-            <text x={tbx + 5} y={tby + 42} fill="#64748B" fontSize="4.5">Facing: {generatedPlan.facing}</text>
-            <text x={tbx + 5} y={tby + 50} fill="#64748B" fontSize="4.5">Style: {generatedPlan.style}</text>
-            <text x={tbx + 5} y={tby + 58} fill="#64748B" fontSize="4.5">Vastu: {generatedPlan.vastu_compliant ? '✓ Yes' : '✗ No'}</text>
-            <line x1={tbx} y1={tby + 63} x2={tbx + 140} y2={tby + 63} stroke="#CBD5E1" strokeWidth="0.3" />
-            <text x={tbx + 70} y={tby + 73} textAnchor="middle" fill="#1E293B" fontSize="5" fontWeight="600">LEGEND</text>
-            <rect x={tbx + 5} y={tby + 78} width={12} height={3} fill="#1A1A1A" /><text x={tbx + 22} y={tby + 82} fill="#64748B" fontSize="4">Ext. Wall (230)</text>
-            <rect x={tbx + 5} y={tby + 87} width={12} height={2} fill="#404040" /><text x={tbx + 22} y={tby + 91} fill="#64748B" fontSize="4">Int. Wall (150)</text>
-            <line x1={tbx + 5} y1={tby + 97} x2={tbx + 17} y2={tby + 97} stroke="#2563EB" strokeWidth="0.8" /><text x={tbx + 22} y={tby + 100} fill="#64748B" fontSize="4">Door</text>
-            <line x1={tbx + 5} y1={tby + 106} x2={tbx + 17} y2={tby + 106} stroke="#0EA5E9" strokeWidth="0.8" /><text x={tbx + 22} y={tby + 109} fill="#64748B" fontSize="4">Window</text>
-            <rect x={tbx + 5} y={tby + 113} width={6} height={6} fill="#333" /><text x={tbx + 22} y={tby + 119} fill="#64748B" fontSize="4">Column (300×300)</text>
-            <line x1={tbx + 5} y1={tby + 127} x2={tbx + 17} y2={tby + 127} stroke="#DC2626" strokeWidth="1" /><text x={tbx + 22} y={tby + 130} fill="#64748B" fontSize="4">Main Entrance</text>
-            <line x1={tbx} y1={tby + 135} x2={tbx + 140} y2={tby + 135} stroke="#CBD5E1" strokeWidth="0.3" />
-            <text x={tbx + 70} y={tby + 145} textAnchor="middle" fill="#1E293B" fontSize="5" fontWeight="600">AREA SCHEDULE</text>
-            {rooms?.slice(0, 12).map((r, i) => (
-              <g key={`as${i}`}>
-                <text x={tbx + 5} y={tby + 155 + i * 9} fill="#475569" fontSize="4">{r.name}</text>
-                <text x={tbx + 135} y={tby + 155 + i * 9} textAnchor="end" fill="#1E293B" fontSize="4" fontWeight="500">{r.area_sqft || r.actual_area_sqft} sqft</text>
+            {/* Project box */}
+            <rect x={px} y={py} width={panelW} height={svgH - py - 30} fill="none" stroke="#CBD5E1" strokeWidth="0.6" />
+
+            {/* PROJECT: header */}
+            <rect x={px} y={py} width={panelW} height={14} fill="#F1F5F9" stroke="#CBD5E1" strokeWidth="0.3" />
+            <text x={px + 5} y={py + 10} fill="#1E293B" fontSize="5.5" fontWeight="700">PROJECT:</text>
+            <text x={px + 5} y={py + 24} fill="#475569" fontSize="4">PLAN SHOWING THE PROPOSED</text>
+            <text x={px + 5} y={py + 31} fill="#475569" fontSize="4">CONSTRUCTION OF {generatedPlan.unit_type}</text>
+            <text x={px + 5} y={py + 38} fill="#475569" fontSize="4">RESIDENTIAL BUILDING</text>
+
+            <line x1={px} y1={py + 44} x2={px + panelW} y2={py + 44} stroke="#CBD5E1" strokeWidth="0.3" />
+            <text x={px + 5} y={py + 54} fill="#57534E" fontSize="4">DRAWING TITLE:</text>
+            <text x={px + panelW / 2} y={py + 64} textAnchor="middle" fill="#1E293B" fontSize="5.5" fontWeight="700">PLAN</text>
+
+            <line x1={px} y1={py + 70} x2={px + panelW} y2={py + 70} stroke="#CBD5E1" strokeWidth="0.3" />
+            <text x={px + 5} y={py + 80} fill="#57534E" fontSize="4">AREA OF THE BUILDING</text>
+            <text x={px + 5} y={py + 90} fill="#1E293B" fontSize="5" fontWeight="600">G.F AREA</text>
+            <text x={px + panelW - 5} y={py + 90} textAnchor="end" fill="#1E293B" fontSize="5" fontWeight="600">{generatedPlan.total_area_sqft} SQ.FT</text>
+
+            {/* Joineries Details */}
+            <line x1={px} y1={py + 98} x2={px + panelW} y2={py + 98} stroke="#CBD5E1" strokeWidth="0.3" />
+            <rect x={px} y={py + 98} width={panelW} height={14} fill="#F1F5F9" stroke="#CBD5E1" strokeWidth="0.3" />
+            <text x={px + panelW / 2} y={py + 108} textAnchor="middle" fill="#1E293B" fontSize="5" fontWeight="700">JOINERIES DETAILS</text>
+            {joineries?.map((j, i) => (
+              <g key={`j${i}`}>
+                <text x={px + 5} y={py + 122 + i * 10} fill="#DC2626" fontSize="4.5" fontWeight="600">{j.code}</text>
+                <text x={px + 25} y={py + 122 + i * 10} fill="#475569" fontSize="4">{j.name}</text>
+                <text x={px + panelW - 5} y={py + 122 + i * 10} textAnchor="end" fill="#1E293B" fontSize="4">{j.size}</text>
               </g>
             ))}
-            <line x1={tbx} y1={tby + 155 + Math.min(rooms?.length || 0, 12) * 9 + 3} x2={tbx + 140} y2={tby + 155 + Math.min(rooms?.length || 0, 12) * 9 + 3} stroke="#CBD5E1" strokeWidth="0.3" />
-            <text x={tbx + 5} y={tby + 155 + Math.min(rooms?.length || 0, 12) * 9 + 12} fill="#1E293B" fontSize="4.5" fontWeight="600">Total: {generatedPlan.total_area_sqft} sqft</text>
+
+            {/* Legend */}
+            <line x1={px} y1={py + 122 + (joineries?.length || 5) * 10 + 5} x2={px + panelW} y2={py + 122 + (joineries?.length || 5) * 10 + 5} stroke="#CBD5E1" strokeWidth="0.3" />
+            {(() => {
+              const ly = py + 122 + (joineries?.length || 5) * 10 + 18;
+              return (<g>
+                <text x={px + panelW / 2} y={ly - 3} textAnchor="middle" fill="#1E293B" fontSize="5" fontWeight="700">LEGEND</text>
+                <rect x={px + 5} y={ly + 3} width={14} height={3.5} fill="#1A1A1A" /><text x={px + 24} y={ly + 7} fill="#57534E" fontSize="4">Ext. Wall (230mm)</text>
+                <rect x={px + 5} y={ly + 12} width={14} height={2} fill="#555" /><text x={px + 24} y={ly + 15} fill="#57534E" fontSize="4">Int. Wall (150mm)</text>
+                <line x1={px + 5} y1={ly + 22} x2={px + 19} y2={ly + 22} stroke="#DC2626" strokeWidth="1.2" /><text x={px + 24} y={ly + 25} fill="#57534E" fontSize="4">Main Entrance</text>
+                <line x1={px + 5} y1={ly + 31} x2={px + 19} y2={ly + 31} stroke="#2563EB" strokeWidth="0.8" /><text x={px + 24} y={ly + 34} fill="#57534E" fontSize="4">Door</text>
+                <line x1={px + 5} y1={ly + 40} x2={px + 19} y2={ly + 40} stroke="#2563EB" strokeWidth="1" /><text x={px + 24} y={ly + 43} fill="#57534E" fontSize="4">Window</text>
+                <rect x={px + 5} y={ly + 47} width={7} height={7} fill="#333" /><text x={px + 24} y={ly + 54} fill="#57534E" fontSize="4">Column</text>
+              </g>);
+            })()}
+
+            {/* Site label */}
+            <text x={px + panelW / 2} y={toY(pd) - 35} textAnchor="middle" fill="#57534E" fontSize="4.5" fontWeight="500">SITE :</text>
           </g>);
         })()}
       </svg>
     );
   }, [generatedPlan]);
+
+  const ftIn = (mm) => {
+    const ft = mm / 304.8;
+    const whole = Math.floor(ft);
+    const inches = Math.round((ft - whole) * 12);
+    return inches > 0 ? `${whole}'-${inches}"` : `${whole}'-0"`;
+  };
 
   return (
     <div className="space-y-6 p-6">
@@ -382,8 +540,16 @@ export default function AIArchitectPage() {
               </div>
             </div>
 
+            {/* Design Name */}
+            <div>
+              <label className="text-xs font-medium text-surface-500">Design Name (optional)</label>
+              <input type="text" value={formData.design_name} onChange={e => updateForm('design_name', e.target.value)}
+                placeholder={`AI ${formData.unit_type} — ${formData.total_area_sqft} sqft`}
+                className="w-full px-3 py-2 rounded-lg border border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 text-sm mt-1" />
+            </div>
+
             {/* Area & Plot */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div>
                 <label className="text-xs font-medium text-surface-500">Total Area (sqft)</label>
                 <input type="number" value={formData.total_area_sqft} onChange={e => updateForm('total_area_sqft', +e.target.value)}
@@ -399,6 +565,27 @@ export default function AIArchitectPage() {
                 <input type="number" value={formData.plot_depth_ft} onChange={e => updateForm('plot_depth_ft', +e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 text-sm mt-1" />
               </div>
+              <div>
+                <label className="text-xs font-medium text-surface-500">No. of Floors</label>
+                <select value={formData.num_floors} onChange={e => updateForm('num_floors', +e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 text-sm mt-1">
+                  {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n} {n === 1 ? 'Floor' : 'Floors'}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* Budget Estimate */}
+            <div>
+              <label className="text-xs font-medium text-surface-500 flex items-center gap-1 mb-1">
+                <DollarSign className="w-3.5 h-3.5" /> Estimated Budget
+              </label>
+              <div className="flex items-center gap-3">
+                <input type="range" min="5" max="200" step="5" value={formData.budget_lakhs}
+                  onChange={e => updateForm('budget_lakhs', +e.target.value)}
+                  className="flex-1 h-2 bg-surface-200 dark:bg-surface-700 rounded-lg appearance-none cursor-pointer accent-violet-600" />
+                <span className="text-sm font-semibold text-surface-900 dark:text-white min-w-[60px] text-right">₹{formData.budget_lakhs}L</span>
+              </div>
+              <p className="text-xs text-surface-400 mt-0.5">~₹{Math.round(formData.budget_lakhs * 100000 / formData.total_area_sqft)}/sqft</p>
             </div>
 
             {/* Facing */}
@@ -431,19 +618,26 @@ export default function AIArchitectPage() {
             </div>
 
             {/* Options */}
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { key: 'vastu_compliant', label: 'Vastu Compliant' },
-                { key: 'include_pooja', label: 'Include Pooja Room' },
-                { key: 'include_study', label: 'Include Study' },
-                { key: 'include_servant', label: 'Servant Room' },
-              ].map(opt => (
-                <label key={opt.key} className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={formData[opt.key]} onChange={e => updateForm(opt.key, e.target.checked)}
-                    className="w-4 h-4 rounded border-surface-300 text-violet-600 focus:ring-violet-500" />
-                  <span className="text-sm text-surface-700 dark:text-surface-300">{opt.label}</span>
-                </label>
-              ))}
+            <div>
+              <label className="text-xs font-medium text-surface-500 mb-2 block">Room & Feature Options</label>
+              <div className="grid grid-cols-2 gap-2.5">
+                {[
+                  { key: 'vastu_compliant', label: 'Vastu Compliant', icon: '🧭' },
+                  { key: 'include_pooja', label: 'Pooja Room', icon: '🪔' },
+                  { key: 'include_study', label: 'Study / Office', icon: '📚' },
+                  { key: 'include_servant', label: 'Servant Room', icon: '🛏️' },
+                  { key: 'include_parking', label: 'Car Parking', icon: '🚗' },
+                  { key: 'include_store', label: 'Store Room', icon: '📦' },
+                  { key: 'include_garden', label: 'Garden / Sitout', icon: '🌿' },
+                ].map(opt => (
+                  <label key={opt.key} className={`flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border transition-all ${formData[opt.key] ? 'border-violet-400 bg-violet-50 dark:bg-violet-900/20' : 'border-surface-200 dark:border-surface-700 hover:bg-surface-50 dark:hover:bg-surface-800'}`}>
+                    <input type="checkbox" checked={formData[opt.key]} onChange={e => updateForm(opt.key, e.target.checked)}
+                      className="w-3.5 h-3.5 rounded border-surface-300 text-violet-600 focus:ring-violet-500" />
+                    <span className="text-sm">{opt.icon}</span>
+                    <span className="text-xs font-medium text-surface-700 dark:text-surface-300">{opt.label}</span>
+                  </label>
+                ))}
+              </div>
             </div>
 
             {/* Generate button */}
@@ -453,13 +647,35 @@ export default function AIArchitectPage() {
               {generating ? 'Generating...' : generatedPlan ? 'Regenerate Floor Plan' : 'Generate Floor Plan'}
             </button>
 
-            {/* Save & Open in Studio */}
+            {/* Save & Download */}
             {generatedPlan && (
-              <button onClick={handleSaveAndOpen} disabled={saving || generating}
-                className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-lg shadow-emerald-500/20">
-                {saving ? <RefreshCw className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5" />}
-                {saving ? 'Saving & Creating Project...' : 'Save & Open in BIM Studio'}
-              </button>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <button onClick={handleSaveAndOpen} disabled={saving || generating}
+                    className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-lg shadow-emerald-500/20">
+                    {saving ? <RefreshCw className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5" />}
+                    {saving ? 'Saving...' : 'Save & Open in Studio'}
+                  </button>
+                  <button onClick={handleSaveOnly} disabled={saving || generating}
+                    className="px-4 py-3 bg-surface-700 hover:bg-surface-800 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-50">
+                    <Save className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => handleDownload('png')}
+                    className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-500/20">
+                    <FileImage className="w-4 h-4" /> Download PNG
+                  </button>
+                  <button onClick={() => handleDownload('svg')}
+                    className="flex-1 py-2.5 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-700 hover:to-teal-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all">
+                    <Download className="w-4 h-4" /> Download SVG
+                  </button>
+                  <button onClick={handlePrint}
+                    className="px-4 py-2.5 bg-surface-600 hover:bg-surface-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all">
+                    <Printer className="w-4 h-4" /> Print
+                  </button>
+                </div>
+              </div>
             )}
           </div>
 
@@ -472,7 +688,7 @@ export default function AIArchitectPage() {
                   <h3 className="text-lg font-semibold text-surface-900 dark:text-white mb-3 flex items-center gap-2">
                     <LayoutGrid className="w-5 h-5 text-violet-500" /> Generated Layout
                   </h3>
-                  <div className="bg-surface-50 dark:bg-surface-800 rounded-xl p-4">
+                  <div className="bg-white rounded-xl p-2 border border-surface-100">
                     {PlanPreview}
                   </div>
                   <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mt-4 text-center">
@@ -491,19 +707,19 @@ export default function AIArchitectPage() {
                   <table className="w-full text-sm">
                     <thead><tr className="border-b border-surface-200 dark:border-surface-700 text-surface-500">
                       <th className="text-left py-1.5">#</th><th className="text-left py-1.5">Room</th><th className="text-right py-1.5">Area (sqft)</th>
-                      <th className="text-right py-1.5">W (mm)</th><th className="text-right py-1.5">D (mm)</th><th className="text-right py-1.5">Zone</th>
+                      <th className="text-right py-1.5">Width</th><th className="text-right py-1.5">Depth</th><th className="text-right py-1.5">Zone</th>
                     </tr></thead>
                     <tbody>{generatedPlan.rooms.map((r, i) => (
                       <tr key={i} className="border-b border-surface-100 dark:border-surface-800 text-surface-700 dark:text-surface-300">
-                        <td className="py-1.5 text-surface-400 font-mono text-xs">{i + 1}</td><td className="py-1.5">{r.name}</td><td className="text-right font-mono">{r.area_sqft || r.actual_area_sqft}</td>
-                        <td className="text-right font-mono text-xs">{r.width}</td><td className="text-right font-mono text-xs">{r.depth}</td>
+                        <td className="py-1.5 text-surface-400 font-mono text-xs">{i + 1}</td><td className="py-1.5">{r.name}</td><td className="text-right font-mono">{r.area_sqft}</td>
+                        <td className="text-right font-mono text-xs">{ftIn(r.width)}</td><td className="text-right font-mono text-xs">{ftIn(r.depth)}</td>
                         <td className="text-right font-mono text-xs">{r.zone || '—'}</td>
                       </tr>
                     ))}</tbody>
                   </table>
                 </div>
 
-                {/* Vastu Analysis */}
+                {/* Vastu */}
                 {generatedPlan.vastu_analysis && (
                   <div className="bg-white dark:bg-surface-900 rounded-2xl border border-surface-200 dark:border-surface-800 p-5 shadow-sm">
                     <h3 className="text-sm font-semibold text-surface-700 dark:text-surface-300 mb-3 flex items-center gap-2">
@@ -529,7 +745,7 @@ export default function AIArchitectPage() {
                   </div>
                 )}
 
-                {/* Design Suggestions */}
+                {/* Suggestions */}
                 {generatedPlan.suggestions && (
                   <div className="bg-white dark:bg-surface-900 rounded-2xl border border-surface-200 dark:border-surface-800 p-5 shadow-sm">
                     <h3 className="text-sm font-semibold text-surface-700 dark:text-surface-300 mb-3 flex items-center gap-2">
@@ -570,7 +786,6 @@ export default function AIArchitectPage() {
               </select>
             </div>
           </div>
-
           {suggestions ? (
             <div className="bg-white dark:bg-surface-900 rounded-2xl border border-surface-200 dark:border-surface-800 p-5 shadow-sm">
               <h3 className="text-lg font-semibold text-surface-900 dark:text-white mb-4">AI Suggestions for {suggestions.project_name}</h3>
@@ -594,8 +809,7 @@ export default function AIArchitectPage() {
             </div>
           ) : (
             <div className="bg-white dark:bg-surface-900 rounded-2xl border border-surface-200 dark:border-surface-800 p-12 text-center text-surface-400">
-              <Lightbulb className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p>Select a project to get AI design suggestions</p>
+              <Lightbulb className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>Select a project to get AI design suggestions</p>
             </div>
           )}
         </div>
@@ -621,7 +835,6 @@ export default function AIArchitectPage() {
               </select>
             </div>
           </div>
-
           {vastuResult?.analysis ? (
             <div className="bg-white dark:bg-surface-900 rounded-2xl border border-surface-200 dark:border-surface-800 p-5 shadow-sm">
               <h3 className="text-lg font-semibold text-surface-900 dark:text-white mb-3 flex items-center gap-2">
@@ -631,7 +844,7 @@ export default function AIArchitectPage() {
                 <div className="relative w-24 h-24">
                   <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
                     <circle cx="50" cy="50" r="42" fill="none" stroke="#E2E8F0" strokeWidth="8" />
-                    <circle cx="50" cy="50" r="42" fill="none" stroke={vastuResult.analysis.percentage >= 70 ? '#10B981' : vastuResult.analysis.percentage >= 40 ? '#F59E0B' : '#EF4444'}
+                    <circle cx="50" cy="50" r="42" fill="none" stroke={vastuResult.analysis.percentage >= 70 ? '#059669' : vastuResult.analysis.percentage >= 40 ? '#D97706' : '#DC2626'}
                       strokeWidth="8" strokeDasharray={`${vastuResult.analysis.percentage * 2.64} 264`} strokeLinecap="round" />
                   </svg>
                   <div className="absolute inset-0 flex items-center justify-center">
@@ -644,7 +857,6 @@ export default function AIArchitectPage() {
                   <p className="text-xs mt-1">Facing: {vastuResult.facing}</p>
                 </div>
               </div>
-
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {vastuResult.analysis.compliance?.map((c, i) => (
                   <div key={i} className="flex items-center gap-2 text-sm p-2 rounded-lg bg-green-50 dark:bg-green-900/20">
@@ -665,8 +877,7 @@ export default function AIArchitectPage() {
             </div>
           ) : (
             <div className="bg-white dark:bg-surface-900 rounded-2xl border border-surface-200 dark:border-surface-800 p-12 text-center text-surface-400">
-              <Compass className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p>Select a project to analyze Vastu compliance</p>
+              <Compass className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>Select a project to analyze Vastu compliance</p>
             </div>
           )}
         </div>

@@ -6,7 +6,8 @@ export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => {
     const stored = localStorage.getItem('theme');
     if (stored) return stored;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    // Default to light theme
+    return 'light';
   });
 
   useEffect(() => {
@@ -19,13 +20,9 @@ export function ThemeProvider({ children }) {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  const toggleTheme = () => setTheme(p => p === 'dark' ? 'light' : 'dark');
 
-  return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
-      {children}
-    </ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={{ theme, toggleTheme }}>{children}</ThemeContext.Provider>;
 }
 
 export const useTheme = () => useContext(ThemeContext);

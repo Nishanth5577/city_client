@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { fetchBIMProjects } from '../../redux/slices/bimSlice';
+
 import {
   ArrowLeft, Zap, Droplets, Wind, Sun, RefreshCw,
   Cable, Plug, Lightbulb, Gauge, PipetteIcon, ShowerHead,
@@ -23,7 +23,7 @@ const TABS = [
 export default function MEPDashboardPage() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { projects } = useSelector(s => s.bim);
+  const [projects, setProjects] = useState([]);
   const [activeTab, setActiveTab] = useState('electrical');
   const [selectedProject, setSelectedProject] = useState('');
   const [loading, setLoading] = useState(false);
@@ -34,30 +34,103 @@ export default function MEPDashboardPage() {
     roofArea: 100, city: 'chennai', panelType: 'standard_440', buildingType: 'residential',
   });
 
-  useEffect(() => { dispatch(fetchBIMProjects()); }, [dispatch]);
+  useEffect(() => {
+    api.get('/api/projects', { params: { limit: 100 } })
+      .then(r => setProjects(r.data.projects || []))
+      .catch(() => {});
+  }, []);
+
+  // ─── Compute MEP analysis from project data ───
+  const computeAnalysis = (project) => {
+    // Estimate area from budget (₹1800/sqft average construction cost)
+    const estimatedAreaSqft = project.budget > 0
+      ? Math.round(project.budget / 1800)
+      : Math.round((project.contract_value || 500000) / 1800);
+    const areaSqm = Math.round(estimatedAreaSqft * 0.0929);
+    const buildingType = project.project_type || 'residential';
+    const isCommercial = buildingType === 'commercial' || buildingType === 'industrial';
+
+    // ─── ELECTRICAL (IS 732 based) ───
+    const loadPerSqft = isCommercial ? 15 : 8; // watts per sqft
+    const connectedLoad = Math.round(estimatedAreaSqft * loadPerSqft);
+    const diversityFactor = isCommercial ? 0.7 : 0.6;
+    const demandLoad = Math.round(connectedLoad * diversityFactor);
+    const totalCurrent = Math.round(demandLoad / (230 * 0.85));
+    const numCircuits = Math.max(4, Math.ceil(connectedLoad / 3000));
+
+    const circuits = {};
+    const circuitTypes = isCommercial
+      ? ['Lighting', 'Power Sockets', 'HVAC', 'UPS', 'DG Backup', 'Lifts']
+      : ['Lighting', 'Power Sockets', 'Kitchen', 'AC', 'Water Heater', 'General'];
+    circuitTypes.forEach((name, i) => {
+      const share = i === 0 ? 0.2 : i === 1 ? 0.25 : 1 / circuitTypes.length;
+      const watts = Math.round(connectedLoad * share);
+      const current = Math.round(watts / (230 * 0.85) * 10) / 10;
+      circuits[name] = {
+        totalWatts: watts,
+        current,
+        cableSize: current > 20 ? '4 sq mm' : current > 10 ? '2.5 sq mm' : '1.5 sq mm',
+        mcb: current > 20 ? '32A' : current > 10 ? '16A' : '6A',
+        elements: Array(Math.ceil(watts / 500)),
+      };
+    });
+
+    // ─── PLUMBING (IS 2065 based) ───
+    const fixturesPerSqm = isCommercial ? 0.03 : 0.05;
+    const totalFixtures = Math.max(4, Math.round(areaSqm * fixturesPerSqm));
+    const supplyFU = Math.round(totalFixtures * 3.5);
+    const drainFU = Math.round(totalFixtures * 4);
+    const mainSupply = supplyFU > 100 ? 50 : supplyFU > 50 ? 32 : 25;
+    const mainDrain = drainFU > 100 ? 110 : drainFU > 50 ? 75 : 50;
+    const tankCapacity = Math.round(totalFixtures * 135);
+
+    // ─── HVAC ───
+    const coolingLoadBTU = isCommercial ? 35 : 25; // BTU/hr per sqft
+    const totalBTU = estimatedAreaSqft * coolingLoadBTU;
+    const totalTonnage = Math.round(totalBTU / 12000 * 10) / 10;
+    const acUnits = Math.ceil(totalTonnage / 1.5);
+    const totalPower = Math.round(totalTonnage * 1.2 * 10) / 10; // kW
+
+    return {
+      electrical: {
+        connectedLoad_kW: (connectedLoad / 1000).toFixed(1),
+        demandLoad_kW: (demandLoad / 1000).toFixed(1),
+        totalCurrent_A: totalCurrent,
+        circuits,
+        estimatedArea: estimatedAreaSqft,
+        buildingType,
+      },
+      plumbing: {
+        totalFixtures,
+        fixtureUnits: { supply: supplyFU, drain: drainFU },
+        mainSupplyPipe_mm: mainSupply,
+        mainDrainPipe_mm: mainDrain,
+        tankCapacity_L: tankCapacity,
+        hotWaterRequired: !isCommercial,
+      },
+      hvac: {
+        acUnits,
+        totalTonnage,
+        ducts: Math.ceil(areaSqm / 15),
+        totalPower_kW: totalPower,
+        totalBTU,
+        coolingLoadPerSqft: coolingLoadBTU,
+      },
+    };
+  };
 
   const fetchAnalysis = async () => {
     if (!selectedProject) return;
     setLoading(true);
     try {
-      // Get floors for this project
-      const projRes = await api.get(`/api/bim/projects/${selectedProject}`);
-      const buildingId = projRes.data?.buildings?.[0]?._id || projRes.data?.buildings?.[0];
-      let floorId = null;
-      if (buildingId) {
-        const floorRes = await api.get(`/api/bim/buildings/${buildingId}/floors`);
-        if (floorRes.data?.length > 0) floorId = floorRes.data[0]._id;
-      }
-
-      const results = {};
-      if (floorId) {
-        try { results.electrical = (await api.get(`/api/bim/mep/analysis/electrical/${floorId}`)).data; } catch (e) {}
-        try { results.plumbing = (await api.get(`/api/bim/mep/analysis/plumbing/${floorId}`)).data; } catch (e) {}
-        try { results.hvac = (await api.get(`/api/bim/mep/analysis/hvac/${floorId}`)).data; } catch (e) {}
-      }
-      try { results.solar = (await api.get(`/api/bim/mep/analysis/solar/${selectedProject}`)).data; } catch (e) {}
+      const projRes = await api.get(`/api/projects/${selectedProject}`);
+      const project = projRes.data;
+      const results = computeAnalysis(project);
       setAnalysis(results);
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+      setAnalysis({});
+    }
     setLoading(false);
   };
 
@@ -87,7 +160,7 @@ export default function MEPDashboardPage() {
       {/* Project selector */}
       <div className="flex gap-4 items-end">
         <div className="flex-1">
-          <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1">Select BIM Project</label>
+          <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1">Select Project</label>
           <select value={selectedProject} onChange={(e) => setSelectedProject(e.target.value)}
             className="w-full px-4 py-2.5 rounded-xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 text-surface-900 dark:text-white">
             <option value="">Choose project...</option>

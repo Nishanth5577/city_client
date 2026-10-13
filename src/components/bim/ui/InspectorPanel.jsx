@@ -1,18 +1,20 @@
 import { useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { Layers, Box, Clock, Palette, GitBranch, MessageSquare } from 'lucide-react';
+import { Layers, Box, Clock, Palette, GitBranch, ShieldCheck } from 'lucide-react';
 import PropertiesPanel from './PropertiesPanel';
 import LayerPanel from './LayerPanel';
-import ObjectTree from './ObjectTree';
+import ModelTree from './ModelTree';
 import HistoryPanel from './HistoryPanel';
 import MaterialBrowser from './MaterialBrowser';
+import DesignValidator from './DesignValidator';
 
 const TABS = [
   { id: 'properties', label: 'Properties', icon: Box },
   { id: 'layers', label: 'Layers', icon: Layers },
   { id: 'materials', label: 'Materials', icon: Palette },
-  { id: 'tree', label: 'Tree', icon: GitBranch },
+  { id: 'tree', label: 'Model Tree', icon: GitBranch },
   { id: 'history', label: 'History', icon: Clock },
+  { id: 'validate', label: 'Validate', icon: ShieldCheck },
 ];
 
 export default function InspectorPanel() {
@@ -42,12 +44,13 @@ export default function InspectorPanel() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-y-auto">
         {activeTab === 'properties' && <PropertiesPanel />}
         {activeTab === 'layers' && <LayerPanel />}
         {activeTab === 'materials' && <MaterialBrowser />}
-        {activeTab === 'tree' && <ObjectTree />}
+        {activeTab === 'tree' && <ModelTree />}
         {activeTab === 'history' && <HistoryPanel />}
+        {activeTab === 'validate' && <DesignValidator />}
       </div>
     </div>
   );

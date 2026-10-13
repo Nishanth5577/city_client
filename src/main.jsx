@@ -17,14 +17,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Toaster
             position="top-right"
             toastOptions={{
-              duration: 4000,
+              duration: 3000,
               style: {
-                borderRadius: '12px',
-                padding: '12px 16px',
-                fontSize: '14px',
+                borderRadius: '12px', padding: '12px 16px', fontSize: '13px',
+                background: 'var(--card-elevated)', color: 'var(--t2)',
+                border: '1px solid var(--border)',
+                boxShadow: 'var(--dropdown-shadow)',
               },
-              success: { style: { background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0' } },
-              error: { style: { background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' } },
+              success: { iconTheme: { primary: '#059669', secondary: 'var(--card-elevated)' } },
+              error: { iconTheme: { primary: '#DC2626', secondary: 'var(--card-elevated)' } },
             }}
           />
         </ThemeProvider>
@@ -33,12 +34,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>
 );
 
-// Register Service Worker for PWA
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then((reg) => console.log('SW registered:', reg.scope))
-      .catch((err) => console.warn('SW registration failed:', err));
-  });
+  window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); });
 }
-

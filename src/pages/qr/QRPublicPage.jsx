@@ -8,10 +8,29 @@ export default function QRPublicPage() {
   const { id } = useParams();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  useEffect(() => { api.get(`/api/projects/public/${id}`).then(r => setData(r.data)).catch(console.error).finally(() => setLoading(false)); }, [id]);
+  const fetchData = () => {
+    setLoading(true);
+    setError(null);
+    api.get(`/api/projects/public/${id}`)
+      .then(r => setData(r.data))
+      .catch(err => setError(err.response?.data?.message || 'Unable to load project'))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchData(); }, [id]);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" /></div>;
+  if (error) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="glass-card p-8 text-center max-w-md">
+        <h3 className="text-lg font-semibold text-surface-900 dark:text-white mb-2">Unable to load project</h3>
+        <p className="text-surface-500 mb-6">{error}</p>
+        <button onClick={fetchData} className="btn-primary">Retry</button>
+      </div>
+    </div>
+  );
   if (!data) return <div className="min-h-screen flex items-center justify-center text-surface-400">Project not found</div>;
 
   const { project, stages } = data;

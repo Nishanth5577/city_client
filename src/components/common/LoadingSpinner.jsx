@@ -1,20 +1,15 @@
 export default function LoadingSpinner({ fullScreen = false, size = 'md' }) {
-  const sizeClasses = { sm: 'w-5 h-5', md: 'w-8 h-8', lg: 'w-12 h-12' };
+  const s = { sm: 16, md: 24, lg: 36 };
+  const d = s[size] || s.md;
   const spinner = (
-    <div className="flex flex-col items-center justify-center gap-3">
-      <div className={`${sizeClasses[size]} relative`}>
-        <div className="absolute inset-0 rounded-full border-2 border-surface-200 dark:border-surface-700" />
-        <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-primary-500 animate-spin" />
+    <div className="flex flex-col items-center gap-3">
+      <div style={{ width: d, height: d, position: 'relative' }}>
+        <div style={{ position:'absolute', inset:0, borderRadius:'50%', border:'2px solid var(--border)' }} />
+        <div className="animate-spin" style={{ position:'absolute', inset:0, borderRadius:'50%', border:'2px solid transparent', borderTopColor:'#0D9488' }} />
       </div>
-      {fullScreen && <p className="text-sm text-surface-500 animate-pulse">Loading...</p>}
+      {fullScreen && <p style={{ fontSize:'12px', color:'var(--t5)', letterSpacing:'0.01em' }} className="animate-pulse">Loading...</p>}
     </div>
   );
-  if (fullScreen) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-surface-50/80 dark:bg-surface-950/80 backdrop-blur-sm z-50">
-        {spinner}
-      </div>
-    );
-  }
+  if (fullScreen) return <div className="fixed inset-0 flex items-center justify-center z-50" style={{ background:'var(--overlay-bg)', backdropFilter:'blur(8px)' }}>{spinner}</div>;
   return <div className="flex items-center justify-center py-12">{spinner}</div>;
 }

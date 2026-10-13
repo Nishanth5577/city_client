@@ -1,134 +1,137 @@
+import { useState, useRef, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { toggleSidebarCollapse, setSidebarOpen } from '../../redux/slices/uiSlice';
 import { logout } from '../../redux/slices/authSlice';
 import {
-  LayoutDashboard, FolderKanban, ListChecks, GanttChart, Package, Users, Receipt,
-  FileText, BarChart3, CalendarDays, MessageSquare, Bell, Settings, LogOut,
-  ChevronLeft, ChevronRight, Building2, HardHat, X, Truck, IndianRupee, ClipboardCheck,
-  Box, Layers, Calculator, PieChart, Zap, Columns3, FolderOpen, ShieldCheck, Eye,
-  Sparkles, Globe, Radio, Download, Glasses
+  LayoutDashboard, FolderKanban, Users, Receipt, FileText, BarChart3,
+  Settings, LogOut, ChevronLeft, ChevronRight, X,
+  IndianRupee, ClipboardCheck, Box, Layers, Package,
+  ListTodo, Truck, Bell, CalendarDays, MessageSquare,
+  GanttChart, PieChart, Landmark, Cpu,
+  BrainCircuit, Building2, Camera
 } from 'lucide-react';
 
 const menuItems = [
-  { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: ['admin', 'project_manager', 'engineer', 'supervisor', 'worker'] },
-  { path: '/projects', icon: FolderKanban, label: 'Projects', roles: ['admin', 'project_manager', 'engineer', 'supervisor'] },
-  { path: '/tasks', icon: ListChecks, label: 'Tasks', roles: ['admin', 'project_manager', 'engineer', 'supervisor', 'worker'] },
-  { path: '/gantt', icon: GanttChart, label: 'Gantt Chart', roles: ['admin', 'project_manager', 'engineer'] },
-  { path: '/resources', icon: Package, label: 'Resources', roles: ['admin', 'project_manager', 'engineer'] },
-  { path: '/workers', icon: Users, label: 'Workers', roles: ['admin', 'project_manager', 'supervisor'] },
-  { path: '/expenses', icon: Receipt, label: 'Expenses', roles: ['admin', 'project_manager'] },
-  { path: '/finance', icon: IndianRupee, label: 'Finance', roles: ['admin', 'project_manager'] },
-  { path: '/suppliers', icon: Truck, label: 'Suppliers', roles: ['admin', 'project_manager'] },
-  { path: '/attendance', icon: ClipboardCheck, label: 'Attendance', roles: ['admin', 'project_manager', 'supervisor'] },
-  { path: '/documents', icon: FileText, label: 'Documents', roles: ['admin', 'project_manager', 'engineer'] },
-  { path: '/reports', icon: BarChart3, label: 'Reports', roles: ['admin', 'project_manager'] },
-  { type: 'divider', label: 'BIM STUDIO', roles: ['admin', 'project_manager', 'engineer'] },
-  { path: '/bim', icon: Box, label: 'Design Studio', roles: ['admin', 'project_manager', 'engineer'] },
-  { path: '/bim/materials', icon: Layers, label: 'Material Library', roles: ['admin', 'project_manager', 'engineer'] },
-  { path: '/bim/cost-estimation', icon: Calculator, label: 'Cost Estimation', roles: ['admin', 'project_manager'] },
-  { path: '/bim/analytics', icon: PieChart, label: 'BIM Analytics', roles: ['admin', 'project_manager'] },
-  { type: 'divider', label: 'ENGINEERING', roles: ['admin', 'project_manager', 'engineer'] },
-  { path: '/bim/structural', icon: Columns3, label: 'Structural Design', roles: ['admin', 'project_manager', 'engineer'] },
-  { path: '/bim/mep', icon: Zap, label: 'MEP Dashboard', roles: ['admin', 'project_manager', 'engineer'] },
-  { type: 'divider', label: 'COLLABORATION', roles: ['admin', 'project_manager', 'engineer'] },
-  { path: '/bim/import', icon: FolderOpen, label: 'Import / Export', roles: ['admin', 'project_manager', 'engineer'] },
-  { path: '/bim/approvals', icon: ShieldCheck, label: 'Design Approvals', roles: ['admin', 'project_manager', 'engineer'] },
-  { path: '/bim/review', icon: Eye, label: 'Client Review', roles: ['admin', 'project_manager'] },
-  { type: 'divider', label: 'AI TOOLS', roles: ['admin', 'project_manager', 'engineer'] },
-  { path: '/bim/ai-architect', icon: Sparkles, label: 'AI Architect', roles: ['admin', 'project_manager', 'engineer'] },
-  { path: '/bim/virtual-tour', icon: Globe, label: '360° Virtual Tour', roles: ['admin', 'project_manager', 'engineer'] },
-  { path: '/bim/vr-ar', icon: Glasses, label: 'VR / AR Viewer', roles: ['admin', 'project_manager', 'engineer'] },
-  { path: '/bim/collaboration', icon: Radio, label: 'Live Collaboration', roles: ['admin', 'project_manager', 'engineer'] },
-  { path: '/bim/exports', icon: Download, label: 'Export Manager', roles: ['admin', 'project_manager', 'engineer'] },
-  { type: 'divider', label: 'GENERAL', roles: ['admin', 'project_manager', 'engineer', 'supervisor', 'worker'] },
-  { path: '/calendar', icon: CalendarDays, label: 'Calendar', roles: ['admin', 'project_manager', 'engineer', 'supervisor', 'worker'] },
-  { path: '/chat', icon: MessageSquare, label: 'Chat', roles: ['admin', 'project_manager', 'engineer', 'supervisor', 'worker'] },
-  { path: '/notifications', icon: Bell, label: 'Notifications', roles: ['admin', 'project_manager', 'engineer', 'supervisor', 'worker'] },
-  { path: '/settings', icon: Settings, label: 'Settings', roles: ['admin', 'project_manager', 'engineer', 'supervisor', 'worker'] },
+  { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: ['admin','project_manager','engineer','supervisor','worker'] },
+  { type:'divider', label:'Projects', roles:['admin','project_manager','engineer','supervisor'] },
+  { path:'/projects', icon:FolderKanban, label:'Projects', roles:['admin','project_manager','engineer','supervisor'] },
+  { path:'/tasks', icon:ListTodo, label:'Tasks', roles:['admin','project_manager','engineer','supervisor'] },
+  { path:'/gantt', icon:GanttChart, label:'Gantt Chart', roles:['admin','project_manager','engineer','supervisor'] },
+  { path:'/site-progress', icon:Camera, label:'Site Progress', roles:['admin','project_manager','engineer','supervisor','worker'] },
+  { type:'divider', label:'BIM Studio', roles:['admin','project_manager','engineer'] },
+  { path:'/bim', icon:Box, label:'Design Studio', roles:['admin','project_manager','engineer'] },
+  { path:'/bim/materials', icon:Layers, label:'Material Library', roles:['admin','project_manager','engineer'] },
+
+  { path:'/bim/analytics', icon:PieChart, label:'BIM Analytics', roles:['admin','project_manager','engineer'] },
+  { type:'divider', label:'Engineering', roles:['admin','project_manager','engineer'] },
+  { path:'/bim/structural', icon:Landmark, label:'Structural Design', roles:['admin','project_manager','engineer'] },
+  { path:'/bim/mep', icon:Cpu, label:'MEP Dashboard', roles:['admin','project_manager','engineer'] },
+  { type:'divider', label:'AI Tools', roles:['admin','project_manager','engineer'] },
+  { path:'/bim/ai-architect', icon:BrainCircuit, label:'AI Architect', roles:['admin','project_manager','engineer'] },
+  { type:'divider', label:'Operations', roles:['admin','project_manager','engineer','supervisor','worker'] },
+  { path:'/workers', icon:Users, label:'Workers', roles:['admin','project_manager','supervisor'] },
+  { path:'/attendance', icon:ClipboardCheck, label:'Attendance', roles:['admin','project_manager','supervisor'] },
+  { path:'/resources', icon:Package, label:'Materials', roles:['admin','project_manager','engineer'] },
+  { path:'/suppliers', icon:Truck, label:'Suppliers', roles:['admin','project_manager'] },
+  { path:'/expenses', icon:Receipt, label:'Expenses', roles:['admin','project_manager'] },
+  { path:'/finance', icon:IndianRupee, label:'Finance', roles:['admin','project_manager'] },
+  { type:'divider', label:'Docs', roles:['admin','project_manager','engineer'] },
+  { path:'/documents', icon:FileText, label:'Documents', roles:['admin','project_manager','engineer'] },
+  { path:'/reports', icon:BarChart3, label:'Reports', roles:['admin','project_manager'] },
+  { type:'divider', label:'System', roles:['admin','project_manager','engineer','supervisor','worker'] },
+  { path:'/chat', icon:MessageSquare, label:'Chat', roles:['admin','project_manager','engineer','supervisor','worker'] },
+  { path:'/notifications', icon:Bell, label:'Notifications', roles:['admin','project_manager','engineer','supervisor','worker'] },
+  { path:'/calendar', icon:CalendarDays, label:'Calendar', roles:['admin','project_manager','engineer','supervisor'] },
+  { path:'/settings', icon:Settings, label:'Settings', roles:['admin','project_manager','engineer','supervisor','worker'] },
 ];
 
 export default function Sidebar() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { sidebarOpen, sidebarCollapsed } = useSelector((state) => state.ui);
-  const { user } = useSelector((state) => state.auth);
+  const { sidebarOpen, sidebarCollapsed } = useSelector(s => s.ui);
+  const { user } = useSelector(s => s.auth);
+  const filtered = menuItems.filter(i => i.roles.includes(user?.role || ''));
+  const navRef = useRef(null);
+  const [canScroll, setCanScroll] = useState(false);
 
-  const filteredMenu = menuItems.filter(item => item.roles.includes(user?.role || ''));
-
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login');
-  };
+  useEffect(() => {
+    const n = navRef.current; if (!n) return;
+    const check = () => setCanScroll(n.scrollHeight - n.scrollTop - n.clientHeight > 20);
+    check(); n.addEventListener('scroll', check);
+    return () => n.removeEventListener('scroll', check);
+  }, [filtered]);
 
   return (
-    <aside className={`fixed top-0 left-0 h-screen z-40 flex flex-col transition-all duration-300 ease-in-out
-      bg-white dark:bg-surface-900 border-r border-surface-200 dark:border-surface-800
+    <aside className={`fixed top-0 left-0 h-screen z-40 flex flex-col transition-all duration-300
       ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0
-      ${sidebarCollapsed ? 'w-20' : 'w-64'}`}>
-      
-      {/* Logo */}
-      <div className="flex items-center justify-between px-4 h-16 border-b border-surface-200 dark:border-surface-800">
-        <div className="flex items-center gap-3 overflow-hidden">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-600 to-primary-800 flex items-center justify-center flex-shrink-0 shadow-glow">
-            <Building2 className="w-5 h-5 text-white" />
+      ${sidebarCollapsed ? 'w-[68px]' : 'w-[252px]'}`}
+      style={{
+        background: 'var(--sidebar-bg)',
+        color: 'var(--sidebar-text)',
+        borderRight: '1px solid var(--sidebar-border)',
+      }}>
+
+      <div className="flex items-center justify-between px-4 h-[56px]" style={{ borderBottom: '1px solid var(--sidebar-divider)' }}>
+        <div className="flex items-center gap-2.5 overflow-hidden min-w-0">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+            style={{ background: 'linear-gradient(135deg, #0D9488, #0F766E)', boxShadow: '0 2px 8px rgba(13,148,136,0.25)' }}>
+            <Building2 className="w-4 h-4 text-white" strokeWidth={2} />
           </div>
           {!sidebarCollapsed && (
-            <div className="animate-fade-in">
-              <h1 className="text-sm font-bold text-surface-900 dark:text-white leading-tight">CITY CONSTRUCTIONS</h1>
-              <p className="text-[10px] text-surface-500">Construction Management ERP</p>
+            <div className="animate-fade-in min-w-0">
+              <p className="truncate" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--sidebar-logo-text)', letterSpacing: '-0.01em' }}>City Constructions</p>
+              <p style={{ fontSize: '10px', fontWeight: 500, color: 'var(--sidebar-logo-sub)', letterSpacing: '0.02em' }}>ERP Platform</p>
             </div>
           )}
         </div>
-        <button onClick={() => dispatch(setSidebarOpen(false))} className="lg:hidden p-1 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800">
-          <X className="w-5 h-5" />
-        </button>
+        <button onClick={() => dispatch(setSidebarOpen(false))} className="lg:hidden p-1 rounded-md transition-colors" style={{ color: 'var(--sidebar-collapse-color)' }}><X className="w-4 h-4" /></button>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-        {filteredMenu.map((item, idx) => (
-          item.type === 'divider' ? (
-            !sidebarCollapsed ? (
-              <div key={`div-${idx}`} className="pt-4 pb-1 px-3">
-                <span className="text-[10px] font-bold text-surface-400 dark:text-surface-600 uppercase tracking-widest">{item.label}</span>
-              </div>
-            ) : <div key={`div-${idx}`} className="h-px bg-surface-200 dark:bg-surface-800 my-2" />
-          ) : (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            end={item.path === '/bim'}
-            onClick={() => window.innerWidth < 1024 && dispatch(setSidebarOpen(false))}
-            className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group
-              ${isActive
-                ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400 shadow-sm'
-                : 'text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-900 dark:hover:text-white'
-              }`}
-          >
-            <item.icon className={`w-5 h-5 flex-shrink-0 transition-transform duration-200 group-hover:scale-110`} />
-            {!sidebarCollapsed && <span className="animate-fade-in">{item.label}</span>}
-          </NavLink>
-          )
-        ))}
-      </nav>
+      <div className="relative flex-1 overflow-hidden">
+        <nav ref={navRef} className="h-full overflow-y-auto py-2.5 px-2 sidebar-nav">
+          {filtered.map((item, i) => (
+            item.type === 'divider' ? (
+              !sidebarCollapsed ? (
+                <div key={`d-${i}`} className="pt-5 pb-1.5 px-2.5">
+                  <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--sidebar-label)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{item.label}</span>
+                </div>
+              ) : <div key={`d-${i}`} className="my-2 mx-2.5" style={{ height: '1px', background: 'var(--sidebar-divider)' }} />
+            ) : (
+              <NavLink key={item.path} to={item.path} end={item.path === '/bim'}
+                onClick={() => window.innerWidth < 1024 && dispatch(setSidebarOpen(false))}
+                className={({ isActive }) => `group relative flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg transition-all duration-200
+                  ${sidebarCollapsed ? 'justify-center' : ''}`}
+                style={({ isActive }) => ({
+                  background: isActive ? 'var(--active-indicator-bg)' : undefined,
+                  color: isActive ? 'var(--active-indicator-color)' : 'var(--sidebar-text)',
+                })}>
+                {({ isActive }) => (
+                  <>
+                    {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[2.5px] h-4 rounded-r-full" style={{ background: '#0D9488', boxShadow: '0 0 8px rgba(13,148,136,0.3)' }} />}
+                    <item.icon className="w-4 h-4 flex-shrink-0" strokeWidth={isActive ? 2 : 1.5} />
+                    {!sidebarCollapsed && (
+                      <span className="truncate transition-colors" style={{ fontSize: '13px', fontWeight: isActive ? 500 : 400, color: isActive ? 'var(--t2)' : undefined }}>{item.label}</span>
+                    )}
+                  </>
+                )}
+              </NavLink>
+            )
+          ))}
+        </nav>
+        {canScroll && <div className="absolute bottom-0 left-0 right-0 h-10 pointer-events-none" style={{ background: `linear-gradient(transparent, var(--sidebar-gradient-end))` }} />}
+      </div>
 
-      {/* Bottom section */}
-      <div className="p-3 border-t border-surface-200 dark:border-surface-800 space-y-2">
-        {/* Collapse button (desktop only) */}
-        <button
-          onClick={() => dispatch(toggleSidebarCollapse())}
-          className="hidden lg:flex w-full items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm text-surface-500 hover:bg-surface-100 dark:hover:bg-surface-800 transition-all"
-        >
+      <div className="px-2 py-2 space-y-0.5" style={{ borderTop: '1px solid var(--sidebar-divider)' }}>
+        <button onClick={() => dispatch(toggleSidebarCollapse())}
+          className="hidden lg:flex w-full items-center justify-center gap-2 px-2.5 py-[7px] rounded-lg transition-all duration-200"
+          style={{ fontSize: '13px', color: 'var(--sidebar-collapse-color)' }}>
           {sidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <><ChevronLeft className="w-4 h-4" /><span>Collapse</span></>}
         </button>
-
-        {/* User info & Logout */}
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 transition-all"
-        >
-          <LogOut className="w-5 h-5 flex-shrink-0" />
+        <button onClick={() => { dispatch(logout()); navigate('/login'); }}
+          className="w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg hover:bg-red-500/8 transition-all duration-200"
+          style={{ fontSize: '13px', color: '#DC2626' }}>
+          <LogOut className="w-4 h-4 flex-shrink-0" strokeWidth={1.5} />
           {!sidebarCollapsed && <span>Logout</span>}
         </button>
       </div>

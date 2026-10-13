@@ -4,6 +4,26 @@ import { Truck, Plus, Search, Star, Phone, Mail, MapPin, Edit, Trash2, X, Packag
 import supplierService from '../../services/supplierService';
 import toast from 'react-hot-toast';
 
+const RATING_LABELS = ['Not Rated', 'Bad', 'Moderate', 'Good'];
+const RATING_COLORS = [
+  'text-surface-400',
+  'text-red-500',
+  'text-amber-500',
+  'text-emerald-500',
+];
+const RATING_BG = [
+  '',
+  'bg-red-50 dark:bg-red-900/20',
+  'bg-amber-50 dark:bg-amber-900/20',
+  'bg-emerald-50 dark:bg-emerald-900/20',
+];
+const RATING_FILL_COLORS = [
+  'text-surface-300',
+  'text-red-400 fill-red-400',
+  'text-amber-400 fill-amber-400',
+  'text-emerald-400 fill-emerald-400',
+];
+
 export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -47,9 +67,58 @@ export default function SuppliersPage() {
 
   const resetForm = () => setForm({ company_name: '', contact_person: '', phone: '', email: '', materials_supplied: '', gst_number: '', rating: 0, address: { street: '', city: '', state: '', zip: '' }, notes: '' });
 
-  const renderStars = (rating) => Array.from({ length: 5 }, (_, i) => (
-    <Star key={i} className={`w-3.5 h-3.5 ${i < Math.round(rating) ? 'text-amber-400 fill-amber-400' : 'text-surface-300'}`} />
-  ));
+  const renderStars = (rating) => {
+    const r = Math.round(rating);
+    return (
+      <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-0.5">
+          {Array.from({ length: 3 }, (_, i) => (
+            <Star key={i} className={`w-3.5 h-3.5 ${i < r ? RATING_FILL_COLORS[r] : 'text-surface-300 dark:text-surface-600'}`} />
+          ))}
+        </div>
+        {r > 0 && (
+          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${RATING_BG[r]} ${RATING_COLORS[r]}`}>
+            {RATING_LABELS[r]}
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  const RatingPicker = ({ value, onChange }) => (
+    <div className="space-y-2">
+      <label className="label-text">Rating</label>
+      <div className="flex items-center gap-3">
+        {[1, 2, 3].map((level) => (
+          <button
+            key={level}
+            type="button"
+            onClick={() => onChange(value === level ? 0 : level)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border-2 transition-all text-xs font-semibold ${
+              value === level
+                ? level === 1
+                  ? 'border-red-400 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 shadow-sm'
+                  : level === 2
+                  ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 shadow-sm'
+                  : 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 shadow-sm'
+                : 'border-surface-200 dark:border-surface-700 text-surface-500 hover:border-surface-300 dark:hover:border-surface-600'
+            }`}
+          >
+            <div className="flex items-center gap-0.5">
+              {Array.from({ length: level }, (_, i) => (
+                <Star key={i} className={`w-3 h-3 ${
+                  value === level
+                    ? level === 1 ? 'text-red-400 fill-red-400' : level === 2 ? 'text-amber-400 fill-amber-400' : 'text-emerald-400 fill-emerald-400'
+                    : 'text-surface-400'
+                }`} />
+              ))}
+            </div>
+            {RATING_LABELS[level]}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -101,9 +170,9 @@ export default function SuppliersPage() {
                 </div>
               )}
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-surface-100 dark:border-surface-800">
-                <div className="flex items-center gap-0.5">{renderStars(s.rating)}</div>
+                {renderStars(s.rating)}
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${s.status === 'active' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : s.status === 'blacklisted' ? 'bg-red-100 text-red-700' : 'bg-surface-100 text-surface-600'}`}>{s.status?.toUpperCase()}</span>
-              </div>
+              </div> 
               {s.gst_number && <p className="text-[10px] text-surface-400 mt-1">GST: {s.gst_number}</p>}
             </div>
           ))}
@@ -133,6 +202,7 @@ export default function SuppliersPage() {
                 <div><label className="label-text">City</label><input type="text" value={form.address.city} onChange={e => setForm({...form, address: {...form.address, city: e.target.value}})} className="input-field" /></div>
                 <div><label className="label-text">State</label><input type="text" value={form.address.state} onChange={e => setForm({...form, address: {...form.address, state: e.target.value}})} className="input-field" /></div>
               </div>
+              <RatingPicker value={form.rating} onChange={(val) => setForm({...form, rating: val})} />
               <div><label className="label-text">Notes</label><textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} className="input-field" rows={2} /></div>
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 rounded-xl text-sm font-medium text-surface-600 hover:bg-surface-100 dark:hover:bg-surface-800">Cancel</button>

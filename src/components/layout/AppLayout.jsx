@@ -12,60 +12,31 @@ import toast from 'react-hot-toast';
 
 export default function AppLayout() {
   const dispatch = useDispatch();
-  const { sidebarOpen, sidebarCollapsed } = useSelector((state) => state.ui);
-  const { user } = useSelector((state) => state.auth);
+  const { sidebarOpen, sidebarCollapsed } = useSelector(s => s.ui);
+  const { user } = useSelector(s => s.auth);
 
-  // Real-time notification listener
   useEffect(() => {
     const socket = getSocket();
     if (!socket || !user) return;
-
-    // Join user-specific room for targeted notifications
     socket.emit('join_user_room', user._id);
-
-    const handleNotification = (notification) => {
-      dispatch(addNotification(notification));
-      toast(notification.message, {
-        icon: '🔔',
-        duration: 4000,
-        style: { borderRadius: '12px', background: '#1e293b', color: '#f1f5f9', fontSize: '14px' },
-      });
-    };
-
+    const handleNotification = (n) => { dispatch(addNotification(n)); toast(n.message, { icon: '🔔', duration: 4000 }); };
     socket.on('notification', handleNotification);
-    return () => {
-      socket.off('notification', handleNotification);
-    };
+    return () => socket.off('notification', handleNotification);
   }, [user, dispatch]);
 
   return (
-    <div className="min-h-screen bg-surface-50 dark:bg-surface-950">
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 lg:hidden"
-          onClick={() => dispatch(setSidebarOpen(false))}
-        />
-      )}
-
-      {/* Sidebar */}
+    <div className="noise-overlay" style={{ minHeight: '100dvh', background: 'var(--canvas)' }}>
+      {sidebarOpen && <div className="fixed inset-0 z-30 lg:hidden" onClick={() => dispatch(setSidebarOpen(false))} style={{ background: 'var(--overlay-bg)', backdropFilter: 'blur(4px)' }} />}
       <Sidebar />
-
-      {/* Main Content */}
-      <div className={`transition-all duration-300 ${sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
+      <div className={`relative z-10 transition-all duration-300 ${sidebarCollapsed ? 'lg:ml-[68px]' : 'lg:ml-[252px]'}`}>
         <TopNav />
-        <main className="p-4 sm:p-6 lg:p-8 min-h-[calc(100vh-4rem)] pb-20 lg:pb-8">
-          <div className="max-w-7xl mx-auto animate-fade-in">
-            <ErrorBoundary>
-              <Outlet />
-            </ErrorBoundary>
+        <main className="p-4 lg:p-6 min-h-[calc(100dvh-56px)] pb-20 lg:pb-6">
+          <div className="max-w-[1440px] mx-auto animate-fade-in">
+            <ErrorBoundary><Outlet /></ErrorBoundary>
           </div>
         </main>
       </div>
-
-      {/* Mobile Bottom Navigation */}
       <MobileNav />
     </div>
   );
 }
-

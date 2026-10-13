@@ -51,7 +51,7 @@ function Hotspot3D({ hotspot, onClick }) {
     <group position={[hotspot.position?.x || 0, hotspot.position?.y || 1.5, hotspot.position?.z || 0]}>
       <mesh onClick={onClick}>
         <sphereGeometry args={[0.15, 16, 16]} />
-        <meshStandardMaterial color="#8B5CF6" emissive="#8B5CF6" emissiveIntensity={0.5} transparent opacity={0.8} />
+        <meshStandardMaterial color="#7C3AED" emissive="#7C3AED" emissiveIntensity={0.5} transparent opacity={0.8} />
       </mesh>
       <Html center distanceFactor={10}>
         <div className="bg-black/70 text-white text-xs px-2 py-1 rounded whitespace-nowrap pointer-events-none">
@@ -381,7 +381,7 @@ export default function VirtualTourPage() {
                   <group key={i} position={[wp.position?.x || 0, wp.position?.y || 0, wp.position?.z || 0]}>
                     <mesh>
                       <coneGeometry args={[0.2, 0.5, 6]} />
-                      <meshStandardMaterial color={i === currentWP ? '#06B6D4' : '#94A3B8'} />
+                      <meshStandardMaterial color={i === currentWP ? '#0891B2' : '#94A3B8'} />
                     </mesh>
                     <Html center distanceFactor={15}>
                       <div className={`text-xs px-1.5 py-0.5 rounded whitespace-nowrap ${i === currentWP ? 'bg-cyan-600 text-white' : 'bg-black/50 text-white'}`}>

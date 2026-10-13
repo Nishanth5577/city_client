@@ -6,7 +6,7 @@ import {
   setActiveTool, selectElement, clearSelection, addElementLocal, updateElementLocal,
   removeElementLocal, pushUndo, setZoom, setPanOffset, startDrawing, endDrawing,
 } from '../../../redux/slices/bimSlice';
-import { TOOLS, WALL_PRESETS, COLUMN_PRESETS, DOOR_PRESETS, WINDOW_PRESETS, FURNITURE_CATALOG, COLORS, SCALE_FACTOR } from '../../../utils/bimConstants';
+import { TOOLS, WALL_PRESETS, COLUMN_PRESETS, DOOR_PRESETS, WINDOW_PRESETS, FURNITURE_CATALOG, COLORS, SCALE_FACTOR, STAIR_PRESETS } from '../../../utils/bimConstants';
 import { snapToGrid, distance, formatMeasurement, wallOffsetPoints } from '../../../utils/geometryUtils';
 import ElectricalOverlay from './overlays/ElectricalOverlay';
 import PlumbingOverlay from './overlays/PlumbingOverlay';
@@ -175,6 +175,115 @@ export default function FloorPlanCanvas({ onCursorMove }) {
       return;
     }
 
+    // Slab tool — click to place a rectangular slab
+    if (activeTool === TOOLS.SLAB) {
+      const element = {
+        canvas_id: uuidv4(),
+        position: worldPos,
+        rotation: 0,
+        width: 4000,
+        depth: 4000,
+        thickness: 150,
+        slab_type: 'solid',
+        color: COLORS.slab || '#C8C8C8',
+        material: 'rcc',
+        layer: 'structural',
+        bim: {},
+      };
+      dispatch(pushUndo({ type: 'add', data: JSON.parse(JSON.stringify(elements)) }));
+      dispatch(addElementLocal({ element_type: 'slab', element }));
+      return;
+    }
+
+    // Roof tool — click to place a roof element
+    if (activeTool === TOOLS.ROOF) {
+      const element = {
+        canvas_id: uuidv4(),
+        position: worldPos,
+        rotation: 0,
+        width: 5000,
+        depth: 5000,
+        thickness: 150,
+        roof_type: toolSettings.roofType || 'flat',
+        slope: 30,
+        color: COLORS.roof || '#8B6914',
+        material: 'concrete',
+        layer: 'structural',
+        bim: {},
+      };
+      dispatch(pushUndo({ type: 'add', data: JSON.parse(JSON.stringify(elements)) }));
+      dispatch(addElementLocal({ element_type: 'roof', element }));
+      return;
+    }
+
+    // Foundation tool
+    if (activeTool === TOOLS.FOUNDATION) {
+      const element = {
+        canvas_id: uuidv4(),
+        position: worldPos,
+        rotation: 0,
+        width: 1500,
+        depth: 1500,
+        thickness: 600,
+        foundation_type: 'isolated',
+        color: COLORS.foundation || '#696969',
+        material: 'rcc',
+        layer: 'structural',
+        bim: {},
+      };
+      dispatch(pushUndo({ type: 'add', data: JSON.parse(JSON.stringify(elements)) }));
+      dispatch(addElementLocal({ element_type: 'foundation', element }));
+      return;
+    }
+
+    // Ceiling tool
+    if (activeTool === TOOLS.CEILING) {
+      const element = {
+        canvas_id: uuidv4(),
+        position: worldPos,
+        rotation: 0,
+        width: 4000,
+        depth: 4000,
+        thickness: 12,
+        ceiling_type: 'gypsum',
+        color: '#F0F0F0',
+        material: 'gypsum',
+        layer: 'architectural',
+        bim: {},
+      };
+      dispatch(pushUndo({ type: 'add', data: JSON.parse(JSON.stringify(elements)) }));
+      dispatch(addElementLocal({ element_type: 'ceiling', element }));
+      return;
+    }
+
+    // Railing tool
+    if (activeTool === TOOLS.RAILING) {
+      setDrawStart(worldPos);
+      setDrawEnd(worldPos);
+      dispatch(startDrawing(worldPos));
+      return;
+    }
+
+    // Room tool — click to place a room label
+    if (activeTool === TOOLS.ROOM) {
+      const element = {
+        canvas_id: uuidv4(),
+        position: worldPos,
+        rotation: 0,
+        width: 4000,
+        depth: 3000,
+        name: 'Room',
+        room_type: 'general',
+        color: COLORS.room_fill || '#F0F8FF20',
+        border_color: COLORS.room_border || '#4A90D9',
+        layer: 'architectural',
+        bim: {},
+      };
+      dispatch(pushUndo({ type: 'add', data: JSON.parse(JSON.stringify(elements)) }));
+      dispatch(addElementLocal({ element_type: 'room', element }));
+      return;
+    }
+
     // Select tool — check if clicked on element
     if (activeTool === TOOLS.SELECT) {
       if (e.target === stage || e.target.getParent() === stage) {
@@ -196,7 +305,7 @@ export default function FloorPlanCanvas({ onCursorMove }) {
     }
 
     // Drawing preview
-    if (drawStart && (activeTool === TOOLS.WALL || activeTool === TOOLS.BEAM)) {
+    if (drawStart && (activeTool === TOOLS.WALL || activeTool === TOOLS.BEAM || activeTool === TOOLS.RAILING)) {
       setDrawEnd(worldPos);
     }
   }, [activeTool, drawStart, dragStart, toWorld, getSnappedPos, dispatch, onCursorMove]);
@@ -208,10 +317,10 @@ export default function FloorPlanCanvas({ onCursorMove }) {
       return;
     }
 
-    // Finish wall/beam drawing
-    if (drawStart && drawEnd && (activeTool === TOOLS.WALL || activeTool === TOOLS.BEAM)) {
+    // Finish wall/beam/railing drawing
+    if (drawStart && drawEnd && (activeTool === TOOLS.WALL || activeTool === TOOLS.BEAM || activeTool === TOOLS.RAILING)) {
       const len = distance(drawStart, drawEnd);
-      if (len > 50) { // Minimum wall length
+      if (len > 50) { // Minimum length
         dispatch(pushUndo({ type: 'add', data: JSON.parse(JSON.stringify(elements)) }));
         if (activeTool === TOOLS.WALL) {
           const wallPreset = WALL_PRESETS.find(p => p.thickness === toolSettings.wallThickness) || WALL_PRESETS[0];
@@ -231,7 +340,7 @@ export default function FloorPlanCanvas({ onCursorMove }) {
               bim: {},
             }
           }));
-        } else {
+        } else if (activeTool === TOOLS.BEAM) {
           dispatch(addElementLocal({
             element_type: 'beam',
             element: {
@@ -244,6 +353,21 @@ export default function FloorPlanCanvas({ onCursorMove }) {
               color: COLORS.beam,
               material: 'rcc',
               layer: 'structural',
+              bim: {},
+            }
+          }));
+        } else if (activeTool === TOOLS.RAILING) {
+          dispatch(addElementLocal({
+            element_type: 'railing',
+            element: {
+              canvas_id: uuidv4(),
+              start_point: drawStart,
+              end_point: drawEnd,
+              height: 1000,
+              railing_type: 'metal',
+              color: COLORS.railing || '#A0A0A0',
+              material: 'steel',
+              layer: 'architectural',
               bim: {},
             }
           }));
@@ -513,19 +637,224 @@ export default function FloorPlanCanvas({ onCursorMove }) {
               offset.bottomRight.x * s, offset.bottomRight.y * s,
               offset.bottomLeft.x * s, offset.bottomLeft.y * s,
             ]}
-            closed fill="#3B82F640" stroke="#3B82F6" strokeWidth={1.5 / zoom}
+            closed fill="#0D948840" stroke="#0D9488" strokeWidth={1.5 / zoom}
             dash={[6 / zoom, 3 / zoom]}
           />
           <Text
             x={(drawStart.x + drawEnd.x) * s / 2}
             y={(drawStart.y + drawEnd.y) * s / 2 - 16 / zoom}
             text={formatMeasurement(len)} fontSize={11 / zoom}
-            fill="#3B82F6" fontStyle="bold" align="center" offsetX={30 / zoom}
+            fill="#0D9488" fontStyle="bold" align="center" offsetX={30 / zoom}
+          />
+        </Group>
+      );
+    }
+    if (activeTool === TOOLS.BEAM) {
+      return (
+        <Group>
+          <Line
+            points={[drawStart.x * s, drawStart.y * s, drawEnd.x * s, drawEnd.y * s]}
+            stroke="#0D9488" strokeWidth={230 * s} lineCap="round"
+            opacity={0.4}
+            dash={[8 / zoom, 4 / zoom]}
+          />
+          <Text
+            x={(drawStart.x + drawEnd.x) * s / 2}
+            y={(drawStart.y + drawEnd.y) * s / 2 - 16 / zoom}
+            text={formatMeasurement(len)} fontSize={11 / zoom}
+            fill="#0D9488" fontStyle="bold" align="center" offsetX={30 / zoom}
+          />
+        </Group>
+      );
+    }
+    if (activeTool === TOOLS.RAILING) {
+      return (
+        <Group>
+          <Line
+            points={[drawStart.x * s, drawStart.y * s, drawEnd.x * s, drawEnd.y * s]}
+            stroke="#0D9488" strokeWidth={2 / zoom}
+            dash={[6 / zoom, 3 / zoom]}
+          />
+          <Text
+            x={(drawStart.x + drawEnd.x) * s / 2}
+            y={(drawStart.y + drawEnd.y) * s / 2 - 16 / zoom}
+            text={formatMeasurement(len)} fontSize={11 / zoom}
+            fill="#0D9488" fontStyle="bold" align="center" offsetX={30 / zoom}
           />
         </Group>
       );
     }
     return null;
+  };
+
+  // Render slab
+  const renderSlab = (slab) => {
+    if (!slab?.position) return null;
+    const s = SCALE_FACTOR;
+    const id = slab._id || slab.canvas_id;
+    const isSelected = selectedElementIds.includes(id);
+    const x = slab.position.x * s;
+    const y = slab.position.y * s;
+    const w = (slab.width || 4000) * s;
+    const d = (slab.depth || 4000) * s;
+    return (
+      <Group key={id} x={x} y={y} rotation={slab.rotation || 0}
+        onClick={(e) => handleElementClick(id, 'slab', e)}>
+        <Rect x={-w / 2} y={-d / 2} width={w} height={d}
+          fill={isSelected ? '#FF6B3520' : (slab.color || '#C8C8C8') + '30'}
+          stroke={isSelected ? '#FF6B35' : slab.color || '#C8C8C8'}
+          strokeWidth={1.5 / zoom} dash={[6 / zoom, 3 / zoom]}
+        />
+        <Text x={-w / 2} y={-8 / zoom} width={w} text={`Slab ${slab.thickness || 150}mm`}
+          fontSize={9 / zoom} fill="#888" align="center" />
+      </Group>
+    );
+  };
+
+  // Render roof
+  const renderRoof = (roof) => {
+    if (!roof?.position) return null;
+    const s = SCALE_FACTOR;
+    const id = roof._id || roof.canvas_id;
+    const isSelected = selectedElementIds.includes(id);
+    const x = roof.position.x * s;
+    const y = roof.position.y * s;
+    const w = (roof.width || 5000) * s;
+    const d = (roof.depth || 5000) * s;
+    return (
+      <Group key={id} x={x} y={y} rotation={roof.rotation || 0}
+        onClick={(e) => handleElementClick(id, 'roof', e)}>
+        <Rect x={-w / 2} y={-d / 2} width={w} height={d}
+          fill={isSelected ? '#FF6B3520' : (roof.color || '#8B6914') + '25'}
+          stroke={isSelected ? '#FF6B35' : roof.color || '#8B6914'}
+          strokeWidth={1.5 / zoom}
+        />
+        {/* Diagonal lines to indicate roof */}
+        <Line points={[-w / 2, -d / 2, w / 2, d / 2]} stroke={(roof.color || '#8B6914') + '40'} strokeWidth={0.5 / zoom} />
+        <Line points={[w / 2, -d / 2, -w / 2, d / 2]} stroke={(roof.color || '#8B6914') + '40'} strokeWidth={0.5 / zoom} />
+        <Text x={-w / 2} y={-8 / zoom} width={w} text={`Roof (${roof.roof_type || 'flat'})`}
+          fontSize={9 / zoom} fill="#8B6914" align="center" />
+      </Group>
+    );
+  };
+
+  // Render foundation
+  const renderFoundation = (fdn) => {
+    if (!fdn?.position) return null;
+    const s = SCALE_FACTOR;
+    const id = fdn._id || fdn.canvas_id;
+    const isSelected = selectedElementIds.includes(id);
+    const x = fdn.position.x * s;
+    const y = fdn.position.y * s;
+    const w = (fdn.width || 1500) * s;
+    const d = (fdn.depth || 1500) * s;
+    return (
+      <Group key={id} x={x} y={y} rotation={fdn.rotation || 0}
+        onClick={(e) => handleElementClick(id, 'foundation', e)}>
+        <Rect x={-w / 2} y={-d / 2} width={w} height={d}
+          fill={isSelected ? '#FF6B3520' : (fdn.color || '#696969') + '35'}
+          stroke={isSelected ? '#FF6B35' : fdn.color || '#696969'}
+          strokeWidth={1.5 / zoom}
+        />
+        <Text x={-w / 2} y={-8 / zoom} width={w} text={`FDN ${fdn.foundation_type || ''}`}
+          fontSize={9 / zoom} fill="#696969" align="center" />
+      </Group>
+    );
+  };
+
+  // Render railing
+  const renderRailing = (rail) => {
+    if (!rail?.start_point || !rail?.end_point) return null;
+    const s = SCALE_FACTOR;
+    const id = rail._id || rail.canvas_id;
+    const isSelected = selectedElementIds.includes(id);
+    return (
+      <Group key={id} onClick={(e) => handleElementClick(id, 'railing', e)}>
+        <Line
+          points={[rail.start_point.x * s, rail.start_point.y * s, rail.end_point.x * s, rail.end_point.y * s]}
+          stroke={isSelected ? '#FF6B35' : rail.color || '#A0A0A0'}
+          strokeWidth={3 / zoom} lineCap="round"
+        />
+        {/* Balusters */}
+        {(() => {
+          const dots = [];
+          const dx = rail.end_point.x - rail.start_point.x;
+          const dy = rail.end_point.y - rail.start_point.y;
+          const len = Math.sqrt(dx * dx + dy * dy);
+          const spacing = 300;
+          const count = Math.floor(len / spacing);
+          for (let i = 1; i <= count; i++) {
+            const t = i / (count + 1);
+            dots.push(
+              <Circle key={i}
+                x={(rail.start_point.x + dx * t) * s}
+                y={(rail.start_point.y + dy * t) * s}
+                radius={2 / zoom}
+                fill={rail.color || '#A0A0A0'}
+              />
+            );
+          }
+          return dots;
+        })()}
+      </Group>
+    );
+  };
+
+  // Render ceiling
+  const renderCeiling = (ceil) => {
+    if (!ceil?.position) return null;
+    const s = SCALE_FACTOR;
+    const id = ceil._id || ceil.canvas_id;
+    const isSelected = selectedElementIds.includes(id);
+    const x = ceil.position.x * s;
+    const y = ceil.position.y * s;
+    const w = (ceil.width || 4000) * s;
+    const d = (ceil.depth || 4000) * s;
+    return (
+      <Group key={id} x={x} y={y} rotation={ceil.rotation || 0}
+        onClick={(e) => handleElementClick(id, 'ceiling', e)}>
+        <Rect x={-w / 2} y={-d / 2} width={w} height={d}
+          fill={isSelected ? '#FF6B3520' : '#F0F0F015'}
+          stroke={isSelected ? '#FF6B35' : '#D0D0D0'}
+          strokeWidth={1 / zoom} dash={[4 / zoom, 4 / zoom]}
+        />
+        <Text x={-w / 2} y={-8 / zoom} width={w} text={`Ceiling (${ceil.ceiling_type || 'gypsum'})`}
+          fontSize={9 / zoom} fill="#AAAAAA" align="center" />
+      </Group>
+    );
+  };
+
+  // Render room
+  const renderRoom = (room) => {
+    if (!room?.position) return null;
+    const s = SCALE_FACTOR;
+    const id = room._id || room.canvas_id;
+    const isSelected = selectedElementIds.includes(id);
+    const x = room.position.x * s;
+    const y = room.position.y * s;
+    const w = (room.width || 4000) * s;
+    const d = (room.depth || 3000) * s;
+    return (
+      <Group key={id} x={x} y={y} rotation={room.rotation || 0}
+        onClick={(e) => handleElementClick(id, 'room', e)}>
+        <Rect x={-w / 2} y={-d / 2} width={w} height={d}
+          fill={isSelected ? '#3B82F620' : room.color || '#F0F8FF20'}
+          stroke={isSelected ? '#FF6B35' : room.border_color || '#4A90D9'}
+          strokeWidth={1.5 / zoom} dash={[8 / zoom, 4 / zoom]}
+        />
+        <Text x={-w / 2} y={-d / 2 + 8 / zoom} width={w}
+          text={room.name || 'Room'}
+          fontSize={12 / zoom} fill={room.border_color || '#4A90D9'}
+          align="center" fontStyle="bold"
+        />
+        {room.width && room.depth && (
+          <Text x={-w / 2} y={8 / zoom} width={w}
+            text={`${(room.width / 1000).toFixed(1)}m × ${(room.depth / 1000).toFixed(1)}m`}
+            fontSize={9 / zoom} fill="#888" align="center"
+          />
+        )}
+      </Group>
+    );
   };
 
   return (
@@ -584,6 +913,24 @@ export default function FloorPlanCanvas({ onCursorMove }) {
 
           {/* Furniture */}
           {furnLayer?.visible && elements.furniture?.map(renderFurniture)}
+
+          {/* Slabs */}
+          {structLayer?.visible && elements.slabs?.map(renderSlab)}
+
+          {/* Roofs */}
+          {structLayer?.visible && elements.roofs?.map(renderRoof)}
+
+          {/* Foundations */}
+          {structLayer?.visible && elements.foundations?.map(renderFoundation)}
+
+          {/* Railings */}
+          {archLayer?.visible && elements.railings?.map(renderRailing)}
+
+          {/* Ceilings */}
+          {archLayer?.visible && elements.ceilings?.map(renderCeiling)}
+
+          {/* Rooms */}
+          {archLayer?.visible && elements.rooms?.map(renderRoom)}
 
           {/* MEP Overlays */}
           {elecLayer?.visible && <ElectricalOverlay elements={electricalElements} zoom={zoom} />}

@@ -59,7 +59,25 @@ const ProceduralFloor = memo(function ProceduralFloor({ points, roomType, floorY
         metalness: tex.metalness ?? 0,
       };
     }
-    return { color: '#D8D0C0', roughness: 0.6 };
+    // Room-specific warm fallback colors matching the architectural reference
+    const FALLBACK_COLORS = {
+      living: '#C8956A',      // warm oak wood
+      bedroom: '#B8845A',     // medium teak wood
+      master_bedroom: '#A07050', // rich walnut
+      kitchen: '#E0D8C8',     // light cream tile
+      bathroom: '#C8D8D8',    // light grey-blue tile
+      toilet: '#D0D8D0',      // light sage tile
+      dining: '#C8956A',      // warm oak wood
+      pooja: '#F0E8E0',       // warm cream marble
+      entrance: '#E8E0D8',    // light marble
+      hallway: '#E0D8D0',     // light stone
+      corridor: '#D8D0C0',    // neutral tile
+      balcony: '#C0B8A8',     // outdoor tile
+      parking: '#A8A0A0',     // concrete grey
+      utility: '#C0B8A8',     // neutral tile
+      default: '#D0C8B8',     // warm tile
+    };
+    return { color: FALLBACK_COLORS[roomType] || FALLBACK_COLORS.default, roughness: 0.55, metalness: 0 };
   }, [roomType, renderMode]);
 
   return (

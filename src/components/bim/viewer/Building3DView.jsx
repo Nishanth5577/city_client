@@ -3,11 +3,11 @@
 // Integrates all procedural engines for architectural visualization
 // ═══════════════════════════════════════════════════════════════
 import { Canvas, useThree } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera, GizmoHelper, GizmoViewport, Html } from '@react-three/drei';
+import { OrbitControls, PerspectiveCamera, GizmoHelper, GizmoViewport, Html, ContactShadows, Environment, Lightformer } from '@react-three/drei';
 import { useSelector, useDispatch } from 'react-redux';
 import { useMemo, Suspense, useState, useCallback, useEffect, memo } from 'react';
 import * as THREE from 'three';
-import { selectElement, clearSelection, setRenderMode } from '../../../redux/slices/bimSlice';
+import { selectElement, clearSelection, setRenderMode, setWalkMode, setTimeOfDay, setLightingPreset } from '../../../redux/slices/bimSlice';
 import { RENDER_MODES, CAMERA_PRESETS } from '../../../utils/bimConstants';
 
 // Engine imports
@@ -20,6 +20,16 @@ import LightingSystem from './engine/LightingSystem';
 import PostProcessingEffects from './engine/PostProcessing';
 import ArchitecturalDetails from './engine/ArchitecturalDetails';
 import { preloadTextures } from './engine/ProceduralTextures';
+
+// New engine systems
+import ArchVizLighting, { StudioBackdrop } from './engine/ArchVizLighting';
+import EnvironmentSystem from './engine/EnvironmentSystem';
+import WalkController, { WalkModeHUD } from './engine/WalkController';
+import EnhancedStair from './engine/EnhancedStair';
+import EnhancedRoof from './engine/EnhancedRoof';
+import SectionPlane, { SectionPlaneControls } from './engine/SectionPlane';
+import MeasureTool, { MeasureToolHUD } from './engine/MeasureTool';
+import CameraToolbar from '../ui/CameraToolbar';
 
 // MEP views
 import ElectricalView3D from './elements/ElectricalView3D';
@@ -43,7 +53,7 @@ const Column3D = memo(function Column3D({ column, floorY = 0, renderMode, select
   const matProps = useMemo(() => {
     if (renderMode === 'wireframe') return { color: '#909090', wireframe: true };
     if (renderMode === 'xray') return { color: '#909090', transparent: true, opacity: 0.12, side: THREE.DoubleSide };
-    return { color: column.color || '#909090', roughness: 0.6, metalness: 0.1 };
+    return { color: column.color || '#C0B8A8', roughness: 0.6, metalness: 0.05 };
   }, [renderMode, column.color]);
 
   if (isCircular) {
@@ -123,21 +133,21 @@ const Door3D = memo(function Door3D({ door, floorY = 0, renderMode, selected, on
       {/* Frame */}
       <mesh position={[w / 2, h / 2, 0]} castShadow>
         <boxGeometry args={[w + 0.06, h + 0.02, t + 0.04]} />
-        <meshStandardMaterial color="#5C4033" roughness={0.7} metalness={0.1} emissive={emissive} emissiveIntensity={emI} />
+        <meshStandardMaterial color="#6B4226" roughness={0.65} metalness={0.05} emissive={emissive} emissiveIntensity={emI} />
       </mesh>
       {/* Panel */}
       <mesh position={[w / 2, h / 2 - 0.01, 0.005]} castShadow>
         <boxGeometry args={[w - 0.04, h - 0.06, t - 0.01]} />
-        <meshStandardMaterial color={door.color || '#8B4513'} roughness={0.5} emissive={emissive} emissiveIntensity={emI} />
+        <meshStandardMaterial color={door.color || '#A0714C'} roughness={0.45} emissive={emissive} emissiveIntensity={emI} />
       </mesh>
       {/* Panel detail — two panels */}
       <mesh position={[w / 2, h * 0.7, t / 2 + 0.002]} castShadow>
         <boxGeometry args={[w - 0.1, h * 0.35, 0.005]} />
-        <meshStandardMaterial color="#704020" roughness={0.55} />
+        <meshStandardMaterial color="#8B5E3C" roughness={0.5} />
       </mesh>
       <mesh position={[w / 2, h * 0.25, t / 2 + 0.002]} castShadow>
         <boxGeometry args={[w - 0.1, h * 0.3, 0.005]} />
-        <meshStandardMaterial color="#704020" roughness={0.55} />
+        <meshStandardMaterial color="#8B5E3C" roughness={0.5} />
       </mesh>
       {/* Handle */}
       <mesh position={[w - 0.08, h * 0.45, t / 2 + 0.015]}>
@@ -330,7 +340,7 @@ function LoadingFallback() {
 }
 
 // ─── Scene Container ───────────────────────────────────────────
-function BuildingScene({ renderMode, selectedIds, onSelect }) {
+function BuildingScene({ renderMode, selectedIds, onSelect, timeOfDay, roofSettings, viewStyle }) {
   const { elements, layers, electricalElements, plumbingElements, hvacElements, solarElements } = useSelector(s => s.bim);
   const floorY = 0;
   const elecLayer = layers.find(l => l.id === 'electrical');
@@ -339,6 +349,23 @@ function BuildingScene({ renderMode, selectedIds, onSelect }) {
   const solarLayer = layers.find(l => l.id === 'solar');
 
   const wallHeight = elements.walls?.[0]?.height || 3000;
+
+  // Building center and extent for lighting/shadows
+  const buildingCenter = useMemo(() => {
+    const pts = (elements.walls || []).filter(w => w?.start_point).map(w => w.start_point);
+    if (pts.length === 0) return [5, 5];
+    const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length * S;
+    const cz = pts.reduce((s, p) => s + p.y, 0) / pts.length * S;
+    return [cx, cz];
+  }, [elements.walls]);
+
+  const buildingExtent = useMemo(() => {
+    const pts = (elements.walls || []).filter(w => w?.start_point).flatMap(w => [w.start_point, w.end_point].filter(Boolean));
+    if (pts.length === 0) return 10;
+    const xs = pts.map(p => p.x * S);
+    const zs = pts.map(p => p.y * S);
+    return Math.max((Math.max(...xs) - Math.min(...xs)), (Math.max(...zs) - Math.min(...zs)), 5) * 1.5;
+  }, [elements.walls]);
 
   // Compute interior light positions from rooms
   const interiorLights = useMemo(() => {
@@ -359,25 +386,40 @@ function BuildingScene({ renderMode, selectedIds, onSelect }) {
     <group>
       <TexturePreloader />
 
-      {/* Terrain (ground, compound wall, driveway, garden) */}
-      <ProceduralTerrain
-        walls={elements.walls}
-        renderMode={renderMode}
-      />
+      {/* Studio Backdrop — clean neutral grey (architectural model look) */}
+      {viewStyle !== 'outdoor' && (
+        <StudioBackdrop renderMode={renderMode} />
+      )}
+
+      {/* Outdoor terrain — only when in outdoor view style */}
+      {viewStyle === 'outdoor' && (
+        <ProceduralTerrain
+          walls={elements.walls}
+          renderMode={renderMode}
+        />
+      )}
 
       {/* Auto-detected rooms → floors + ceilings + labels */}
       <RoomGenerator
         walls={elements.walls}
         renderMode={renderMode}
+        showCeiling={viewStyle === 'outdoor'}
       />
 
-      {/* Roof */}
-      {elements.walls?.length >= 3 && (
-        <ProceduralRoof
-          walls={elements.walls}
-          roofType="flat"
+      {/* Enhanced Roof — hidden in studio/dollhouse view to see room interiors */}
+      {elements.walls?.length >= 3 && viewStyle === 'outdoor' && (
+        <EnhancedRoof
+          points={elements.walls.filter(w => w?.start_point).map(w => w.start_point)}
+          roofType={roofSettings?.type || 'flat'}
           wallHeight={wallHeight}
+          slope={roofSettings?.slope || 30}
+          ridgeHeight={roofSettings?.ridgeHeight || 1200}
+          overhang={roofSettings?.overhang || 300}
+          thickness={roofSettings?.thickness || 150}
+          hasParapet={roofSettings?.hasParapet !== false}
+          parapetHeight={roofSettings?.parapetHeight || 900}
           renderMode={renderMode}
+          material={roofSettings?.material || 'concrete'}
         />
       )}
 
@@ -451,9 +493,9 @@ function BuildingScene({ renderMode, selectedIds, onSelect }) {
         />
       ))}
 
-      {/* Stairs (with railings) */}
+      {/* Enhanced Stairs (multi-type with railings) */}
       {elements.stairs?.map((stair, i) => (
-        <Stair3D
+        <EnhancedStair
           key={stair._id || stair.canvas_id || i}
           stair={stair}
           floorY={floorY}
@@ -461,13 +503,15 @@ function BuildingScene({ renderMode, selectedIds, onSelect }) {
         />
       ))}
 
-      {/* Architectural Details (cornices, sunshades, cladding, canopy, drainage, lights) */}
-      <ArchitecturalDetails
-        walls={elements.walls}
-        windows={elements.windows}
-        wallHeight={wallHeight}
-        renderMode={renderMode}
-      />
+      {/* Architectural Details (cornices, sunshades, cladding) — outdoor view only */}
+      {viewStyle === 'outdoor' && (
+        <ArchitecturalDetails
+          walls={elements.walls}
+          windows={elements.windows}
+          wallHeight={wallHeight}
+          renderMode={renderMode}
+        />
+      )}
 
       {/* MEP 3D Views */}
       {elecLayer?.visible && electricalElements?.length > 0 && <ElectricalView3D elements={electricalElements} floorY={floorY} />}
@@ -475,12 +519,34 @@ function BuildingScene({ renderMode, selectedIds, onSelect }) {
       {hvacLayer?.visible && hvacElements?.length > 0 && <HVACView3D elements={hvacElements} floorY={floorY} />}
       {solarLayer?.visible && solarElements?.length > 0 && <SolarView3D elements={solarElements} roofY={wallHeight * S + 0.15} />}
 
-      {/* Lighting System */}
-      <LightingSystem
-        timeOfDay={14}
-        interiorLights={interiorLights}
-        renderMode={renderMode}
-      />
+      {/* Lighting — Studio (archviz) or Outdoor (environment) */}
+      {viewStyle === 'outdoor' ? (
+        <EnvironmentSystem
+          hour={timeOfDay || 14}
+          showGround={true}
+          showFog={true}
+          castShadow={renderMode !== 'wireframe'}
+        />
+      ) : (
+        <ArchVizLighting
+          walls={elements.walls}
+          wallHeight={wallHeight}
+          renderMode={renderMode}
+        />
+      )}
+
+      {/* Contact Shadows — soft ground shadow like architectural model */}
+      {viewStyle !== 'outdoor' && renderMode !== 'wireframe' && (
+        <ContactShadows
+          position={[buildingCenter[0], 0.001, buildingCenter[1]]}
+          opacity={0.45}
+          scale={buildingExtent * 2}
+          blur={2.5}
+          far={20}
+          resolution={512}
+          color="#4A4540"
+        />
+      )}
     </group>
   );
 }
@@ -488,84 +554,156 @@ function BuildingScene({ renderMode, selectedIds, onSelect }) {
 // ─── Main Export ───────────────────────────────────────────────
 export default function Building3DView() {
   const dispatch = useDispatch();
-  const { renderMode, selectedElementIds } = useSelector(s => s.bim);
+  const { renderMode, selectedElementIds, walkMode, timeOfDay, roofSettings, elements, activeTool } = useSelector(s => s.bim);
   const [cameraPreset, setCameraPreset] = useState(null);
+  const [sectionEnabled, setSectionEnabled] = useState(false);
+  const [sectionDirection, setSectionDirection] = useState('horizontal');
+  const [sectionPosition, setSectionPosition] = useState(1.5);
+  const [viewStyle, setViewStyle] = useState('studio'); // 'studio' | 'outdoor'
+  const isMeasuring = activeTool === 'measure';
 
   const handleSelect = useCallback((id, type) => {
     dispatch(selectElement({ id, type }));
   }, [dispatch]);
 
+  const handleCameraView = useCallback((viewId, position) => {
+    setCameraPreset(viewId.toUpperCase());
+    setTimeout(() => setCameraPreset(null), 100);
+  }, []);
+
+  const handleWalkMode = useCallback(() => {
+    dispatch(setWalkMode(true));
+  }, [dispatch]);
+
+  const handleExitWalk = useCallback(() => {
+    dispatch(setWalkMode(false));
+  }, [dispatch]);
+
+  const handleTimeChange = useCallback((t) => {
+    dispatch(setTimeOfDay(t));
+  }, [dispatch]);
+
+  const handleLightingPreset = useCallback((preset) => {
+    dispatch(setTimeOfDay(preset.hour));
+    dispatch(setLightingPreset(preset.name.toLowerCase()));
+  }, [dispatch]);
+
+  const handleRenderMode = useCallback((mode) => {
+    dispatch(setRenderMode(mode));
+  }, [dispatch]);
+
+  // Canvas background color based on view style
+  const bgColor = viewStyle === 'outdoor' ? '#1a1a2e' : '#E8E4E0';
+
   return (
-    <div className="w-full h-full relative bg-gradient-to-b from-sky-200 to-sky-400">
+    <div className="w-full h-full relative">
       <Canvas
         shadows
         dpr={[1, 2]}
         gl={{
           antialias: true,
           toneMapping: THREE.ACESFilmicToneMapping,
-          toneMappingExposure: 1.4,
+          toneMappingExposure: viewStyle === 'outdoor' ? 1.4 : 1.1,
           outputColorSpace: THREE.SRGBColorSpace,
           powerPreference: 'high-performance',
           physicallyCorrectLights: true,
         }}
+        style={{ background: bgColor }}
       >
-        <PerspectiveCamera makeDefault position={[15, 12, 15]} fov={50} near={0.1} far={500} />
-        <OrbitControls
-          enableDamping dampingFactor={0.05}
-          minDistance={2} maxDistance={150}
-          maxPolarAngle={Math.PI / 2.05}
-          target={[5, 1, 5]}
+        {/* Isometric dollhouse camera — matches architectural visualization reference */}
+        <PerspectiveCamera
+          makeDefault
+          position={viewStyle === 'outdoor' ? [15, 12, 15] : [18, 14, 18]}
+          fov={viewStyle === 'outdoor' ? 50 : 40}
+          near={0.1}
+          far={500}
+        />
+        
+        {/* Orbit controls — disabled during walk mode */}
+        {!walkMode && (
+          <OrbitControls
+            enableDamping dampingFactor={0.08}
+            minDistance={2} maxDistance={150}
+            maxPolarAngle={Math.PI / 2.05}
+            target={[5, 1, 5]}
+            rotateSpeed={0.5}
+            zoomSpeed={1.2}
+          />
+        )}
+
+        {/* Walk-through controller */}
+        <WalkController
+          enabled={walkMode}
+          onExit={handleExitWalk}
+          walls={elements.walls}
         />
 
         <CameraController preset={cameraPreset} />
 
         {/* ViewCube */}
-        <GizmoHelper alignment="top-right" margin={[80, 80]}>
-          <GizmoViewport axisColors={['#ef4444', '#22c55e', '#3b82f6']} labelColor="white" />
-        </GizmoHelper>
+        {!walkMode && (
+          <GizmoHelper alignment="top-right" margin={[80, 80]}>
+            <GizmoViewport axisColors={['#DC2626', '#22c55e', '#0D9488']} labelColor="white" />
+          </GizmoHelper>
+        )}
 
         <Suspense fallback={<LoadingFallback />}>
           <BuildingScene
             renderMode={renderMode}
             selectedIds={selectedElementIds}
             onSelect={handleSelect}
+            timeOfDay={timeOfDay}
+            roofSettings={roofSettings}
+            viewStyle={viewStyle}
           />
+          {/* Section Plane */}
+          <SectionPlane
+            enabled={sectionEnabled}
+            direction={sectionDirection}
+            position={sectionPosition}
+          />
+
+          {/* Measurement Tool */}
+          <MeasureTool
+            enabled={isMeasuring}
+            mode="distance"
+          />
+
           {/* Post-processing effects */}
           <PostProcessingEffects enabled renderMode={renderMode} />
         </Suspense>
       </Canvas>
 
-      {/* Render Mode Selector — Bottom Left */}
-      <div className="absolute bottom-3 left-3 flex items-center gap-1 bg-surface-900/90 backdrop-blur-sm rounded-xl p-1 border border-surface-700/50">
-        {Object.entries(RENDER_MODES).map(([key, value]) => (
-          <button
-            key={key}
-            onClick={() => dispatch(setRenderMode(value))}
-            className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all ${
-              renderMode === value
-                ? 'bg-primary-600/30 text-primary-400 ring-1 ring-primary-500/50'
-                : 'text-surface-400 hover:text-white hover:bg-surface-800'
-            }`}
-            title={key}
-          >
-            {key.charAt(0) + key.slice(1).toLowerCase().replace('_', ' ')}
-          </button>
-        ))}
-      </div>
+      {/* Walk Mode HUD */}
+      <WalkModeHUD isActive={walkMode} onExit={handleExitWalk} />
 
-      {/* Camera Presets — Bottom Right */}
-      <div className="absolute bottom-3 right-3 flex flex-col gap-1 bg-surface-900/90 backdrop-blur-sm rounded-xl p-1 border border-surface-700/50">
-        {Object.entries(CAMERA_PRESETS).map(([key, preset]) => (
-          <button
-            key={key}
-            onClick={() => setCameraPreset(key)}
-            className="px-2.5 py-1 rounded-lg text-[10px] font-medium text-surface-400 hover:text-white hover:bg-surface-800 transition-all text-left"
-            title={preset.name}
-          >
-            {preset.name}
-          </button>
-        ))}
-      </div>
+      {/* Camera Toolbar — Right side */}
+      {!walkMode && (
+        <CameraToolbar
+          cameraMode={walkMode ? 'walk' : 'orbit'}
+          renderMode={renderMode}
+          onCameraView={handleCameraView}
+          onCameraMode={() => {}}
+          onRenderMode={handleRenderMode}
+          onWalkMode={handleWalkMode}
+          timeOfDay={timeOfDay}
+          onTimeChange={handleTimeChange}
+          onLightingPreset={handleLightingPreset}
+        />
+      )}
+
+      {/* Section Cut Controls */}
+      <SectionPlaneControls
+        enabled={sectionEnabled}
+        direction={sectionDirection}
+        position={sectionPosition}
+        onToggle={() => setSectionEnabled(false)}
+        onDirectionChange={setSectionDirection}
+        onPositionChange={setSectionPosition}
+      />
+
+      {/* Measure Tool HUD */}
+      <MeasureToolHUD enabled={isMeasuring} />
 
       {/* Selection Info — Top Left */}
       {selectedElementIds.length > 0 && (
@@ -574,10 +712,55 @@ export default function Building3DView() {
         </div>
       )}
 
-      {/* Engine Badge — Top Right */}
-      <div className="absolute top-3 right-3 bg-surface-900/70 backdrop-blur-sm rounded-lg px-2 py-1 border border-surface-700/30 text-[9px] text-surface-500">
-        PBR Engine • Procedural Textures
+      {/* View Style Toggle + Section — Bottom Left */}
+      {!walkMode && (
+        <div className="absolute bottom-3 left-3 flex items-center gap-1.5">
+          {/* Studio / Outdoor toggle */}
+          <div className="flex bg-surface-900/90 backdrop-blur-sm rounded-lg border border-surface-700/50 overflow-hidden">
+            <button
+              onClick={() => setViewStyle('studio')}
+              className={`px-2.5 py-1.5 text-[10px] font-medium transition-all ${
+                viewStyle === 'studio'
+                  ? 'bg-primary-600/30 text-primary-400'
+                  : 'text-surface-400 hover:text-white'
+              }`}
+              title="Studio View (Architectural Model)"
+            >
+              🏛️ Studio
+            </button>
+            <button
+              onClick={() => setViewStyle('outdoor')}
+              className={`px-2.5 py-1.5 text-[10px] font-medium transition-all ${
+                viewStyle === 'outdoor'
+                  ? 'bg-primary-600/30 text-primary-400'
+                  : 'text-surface-400 hover:text-white'
+              }`}
+              title="Outdoor View (Environment)"
+            >
+              🌳 Outdoor
+            </button>
+          </div>
+
+          {/* Section cut toggle */}
+          <button
+            onClick={() => setSectionEnabled(!sectionEnabled)}
+            className={`px-2.5 py-1.5 rounded-lg text-[10px] font-medium backdrop-blur-sm border transition-all ${
+              sectionEnabled
+                ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                : 'bg-surface-900/90 text-surface-400 border-surface-700/50 hover:text-white hover:bg-surface-800'
+            }`}
+            title="Section Cut"
+          >
+            ✂️ Section
+          </button>
+        </div>
+      )}
+
+      {/* Engine Badge — Bottom Right */}
+      <div className="absolute bottom-3 right-3 bg-surface-900/70 backdrop-blur-sm rounded-lg px-2 py-1 border border-surface-700/30 text-[9px] text-surface-500">
+        BIM Engine • PBR • ArchViz
       </div>
     </div>
   );
 }
+

@@ -2,47 +2,24 @@ import { Component } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 export default class ErrorBoundary extends Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error, errorInfo) {
-    console.error('ErrorBoundary caught:', error, errorInfo);
-  }
-
-  handleReset = () => {
-    this.setState({ hasError: false, error: null });
-  };
-
+  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  componentDidCatch(error, info) { console.error('ErrorBoundary:', error, info); }
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center min-h-[400px] p-8 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-6">
-            <AlertTriangle className="w-8 h-8 text-red-500" />
+        <div className="flex flex-col items-center justify-center py-20 px-4">
+          <div className="p-6 text-center max-w-md rounded-2xl" style={{ background:'var(--card)', border:'1px solid var(--border)', boxShadow:'var(--card-shadow)' }}>
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4" style={{ background:'#FEF2F2', border:'1px solid #FECACA' }}>
+              <AlertTriangle className="w-6 h-6" style={{ color:'#DC2626' }} />
+            </div>
+            <h3 style={{ fontSize:'15px', fontWeight:600, color:'var(--t1)', marginBottom:6, letterSpacing:'-0.01em' }}>Something went wrong</h3>
+            <p style={{ fontSize:'13px', color:'var(--t4)', marginBottom:20, lineHeight:1.5 }}>{this.state.error?.message || 'Unexpected error'}</p>
+            <button onClick={() => window.location.reload()} className="btn-primary"><RefreshCw className="w-3.5 h-3.5" /> Reload</button>
           </div>
-          <h2 className="text-xl font-bold text-surface-900 dark:text-white mb-2">
-            Something went wrong
-          </h2>
-          <p className="text-surface-500 max-w-md mb-6">
-            {this.state.error?.message || 'An unexpected error occurred. Please try again.'}
-          </p>
-          <button
-            onClick={this.handleReset}
-            className="btn-primary flex items-center gap-2"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Try Again
-          </button>
         </div>
       );
     }
-
     return this.props.children;
   }
 }

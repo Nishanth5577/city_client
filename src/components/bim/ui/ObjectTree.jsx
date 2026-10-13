@@ -13,7 +13,7 @@ const ELEMENT_GROUPS = [
   { key: 'doors', label: 'Doors', icon: '🚪', color: '#8B4513' },
   { key: 'windows', label: 'Windows', icon: '⊞', color: '#87CEEB' },
   { key: 'stairs', label: 'Stairs', icon: '⊟', color: '#B0B0B0' },
-  { key: 'furniture', label: 'Furniture', icon: '🪑', color: '#8B5CF6' },
+  { key: 'furniture', label: 'Furniture', icon: '🪑', color: '#7C3AED' },
   { key: 'rooms', label: 'Rooms', icon: '⬚', color: '#4A90D9' },
 ];
 
